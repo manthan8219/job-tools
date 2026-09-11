@@ -1,8 +1,10 @@
 import { testPostgresConnection, closePostgres } from "./postgres.js";
 import { testMongoConnection, closeMongo } from "./mongo.js";
+import { closeRedis } from "./redis.js";
 
 export * from "./postgres.js";
 export * from "./mongo.js";
+export * from "./redis.js";
 
 export interface DatabaseHealthStatus {
   postgres: { ok: boolean; error?: string };
@@ -22,5 +24,5 @@ export async function checkDatabasesHealth(): Promise<DatabaseHealthStatus> {
 }
 
 export async function closeAllDatabases(): Promise<void> {
-  await Promise.allSettled([closePostgres(), closeMongo()]);
+  await Promise.allSettled([closePostgres(), closeMongo(), closeRedis()]);
 }

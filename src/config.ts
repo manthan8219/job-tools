@@ -16,6 +16,9 @@ export interface AppConfig {
     dbName: string;
     connectTimeoutMS: number;
   };
+  redis: {
+    url: string;
+  };
 }
 
 export const config: AppConfig = {
@@ -35,5 +38,8 @@ export const config: AppConfig = {
     uri: process.env.MONGODB_URI || "mongodb://localhost:27017",
     dbName: process.env.MONGODB_DB_NAME || "job_applier_db",
     connectTimeoutMS: 5000,
+  },
+  redis: {
+    url: process.env.REDIS_URL || "redis://localhost:6379",
   },
 };
