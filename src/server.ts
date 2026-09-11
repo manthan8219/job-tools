@@ -3,6 +3,7 @@ import { createUserTool, getUserTool } from "./tools/user/userTools.js";
 import { loginTool, registerTool } from "./tools/auth/authTools.js";
 import { createResumeTool, searchSimilarResumesTool } from "./tools/resume/resumeTools.js";
 import { convertMdToPdfTool, convertLatexToPdfTool } from "./tools/utilities/converterTools.js";
+import { checkOnboardingTool, markOnboardingCompletedTool } from "./tools/onboarding/onboardingTools.js";
 
 export const server = new MCPServer({
   name: "job-applier-mcp",
@@ -16,5 +17,7 @@ export const server = new MCPServer({
     searchSimilarResumes: searchSimilarResumesTool,
     convertMdToPdf: convertMdToPdfTool,
     convertLatexToPdf: convertLatexToPdfTool,
+    checkOnboardingCompleted: checkOnboardingTool,
+    markOnboardingCompleted: markOnboardingCompletedTool,
   },
 });

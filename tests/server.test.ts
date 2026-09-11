@@ -19,7 +19,7 @@ describe("MCP Server Base Setup", () => {
 
   it("should initialize with user tools registered", () => {
     const toolList = server.getToolListInfo();
-    expect(toolList.tools.length).toBeGreaterThanOrEqual(8);
+    expect(toolList.tools.length).toBeGreaterThanOrEqual(10);
     expect(toolList.tools.some((t: any) => t.name === "createUser")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "getUser")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "login")).toBe(true);
@@ -28,6 +28,8 @@ describe("MCP Server Base Setup", () => {
     expect(toolList.tools.some((t: any) => t.name === "searchSimilarResumes")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "convertMdToPdf")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "convertLatexToPdf")).toBe(true);
+    expect(toolList.tools.some((t: any) => t.name === "checkOnboardingCompleted")).toBe(true);
+    expect(toolList.tools.some((t: any) => t.name === "markOnboardingCompleted")).toBe(true);
   });
 
   it("should support registering and executing a Mastra tool", async () => {
