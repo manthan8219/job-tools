@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { MCPServer } from "@mastra/mcp";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { server } from "../src/index.js";
+import { server } from "../src/server.js";
 
 describe("MCP Server Base Setup", () => {
   it("should successfully instantiate an MCPServer", () => {
