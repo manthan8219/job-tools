@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { server } from "./server.js";
 import { resumeRepository } from "./resume/repositories/resumeRepository.js";
+import { userProfileService } from "./user-profile/services/userProfileService.js";
 import { logger } from "./utils/index.js";
 import http from "node:http";
 
@@ -11,6 +12,9 @@ async function main() {
   
   // Programmatically create Atlas Search Indexes
   await resumeRepository.setupIndexes();
+  
+  // Initialize Postgres tables for user profile (job applications)
+  await userProfileService.init();
 
   // Create an HTTP Server for SSE
   const httpServer = http.createServer(async (req, res) => {

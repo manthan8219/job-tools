@@ -5,6 +5,7 @@ import { createResumeTool, searchSimilarResumesTool } from "./tools/resume/resum
 import { convertMdToPdfTool, convertLatexToPdfTool } from "./tools/utilities/converterTools.js";
 import { checkOnboardingTool, markOnboardingCompletedTool } from "./tools/onboarding/onboardingTools.js";
 import { passportLoginTool, passportLogoutTool } from "./passport-auth/tools.js";
+import { trackJobApplicationTool, getUserStatsTool, getUserApplicationsTool } from "./user-profile/tools/userProfileTools.js";
 
 export const server = new MCPServer({
   name: "job-applier-mcp",
@@ -22,5 +23,8 @@ export const server = new MCPServer({
     markOnboardingCompleted: markOnboardingCompletedTool,
     passportLogin: passportLoginTool,
     passportLogout: passportLogoutTool,
+    trackJobApplication: trackJobApplicationTool,
+    getUserApplicationStats: getUserStatsTool,
+    getUserApplications: getUserApplicationsTool,
   },
 });
