@@ -4,6 +4,25 @@ import { logger } from "../../utils/index.js";
 import { randomUUID } from "node:crypto";
 
 export class UserRepository {
+  async init(): Promise<void> {
+    try {
+      await queryPostgres(`
+        CREATE TABLE IF NOT EXISTS users (
+          id UUID PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password_hash VARCHAR(255),
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          mobile_number VARCHAR(20),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      logger.info("Initialized users table in PostgreSQL");
+    } catch (error) {
+      logger.error("Failed to initialize users table", error);
+      throw error;
+    }
+  }
   async findById(id: string): Promise<User | null> {
     try {
       const result = await queryPostgres<User>(

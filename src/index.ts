@@ -18,6 +18,10 @@ async function main() {
   // Programmatically create Atlas Search Indexes
   await resumeRepository.setupIndexes();
   
+  // Initialize core users table first
+  const { userRepository } = await import("./user/repositories/userRepository.js");
+  await userRepository.init();
+
   // Initialize Postgres tables for user profile (job applications)
   await userProfileService.init();
   
