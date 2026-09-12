@@ -127,12 +127,16 @@ async function main() {
         logger.info(`Established new SSE connection on ${req.originalUrl}`);
       }
 
-      const url = new URL(req.originalUrl || "", `https://job-tools.onrender.com`);
+      // Dynamically build the URL so it works on both localhost and Render
+      const host = req.get('host') || `localhost:${PORT}`;
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+      const url = new URL(req.originalUrl || "", `${protocol}://${host}`);
       
       await server.startSSE({
         url,
-        ssePath: "/sse",
-        messagePath: "/sse", // MUST be the exact base path, no query params!
+        // Prevent startSSE from treating POST requests as SSE stream connections
+        ssePath: req.method === 'GET' ? "/sse" : "/__sse_disabled__",
+        messagePath: req.method === 'POST' ? url.pathname : "/message", 
         req,
         res,
       });
@@ -144,11 +148,9 @@ async function main() {
     }
   };
 
-  // Support both GET for the stream and POST for messages on /sse
+  // Support GET /sse (stream), POST /sse (direct message), and POST /message (standard MCP SSE)
   app.get('/sse', handleMastra);
   app.post('/sse', handleMastra);
-  
-  // Keep /message for backwards compatibility
   app.post('/message', handleMastra);
 
   const httpServer = http.createServer(app);
