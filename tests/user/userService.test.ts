@@ -12,6 +12,13 @@ vi.mock("../../src/user/repositories/userRepository.js", () => ({
   },
 }));
 
+// Mock the user profile service
+vi.mock("../../src/user-profile/services/userProfileService.js", () => ({
+  userProfileService: {
+    createUserStats: vi.fn(),
+  },
+}));
+
 describe("UserService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,13 +46,16 @@ describe("UserService", () => {
     };
 
     it("should successfully create a new user", async () => {
+      const { userProfileService } = await import("../../src/user-profile/services/userProfileService.js");
       vi.mocked(userRepository.findByEmail).mockResolvedValueOnce(null); // Not found
       vi.mocked(userRepository.create).mockResolvedValueOnce(mockUser);
+      vi.mocked(userProfileService.createUserStats).mockResolvedValueOnce({} as any);
 
       const result = await userService.createUser(validInput);
 
       expect(userRepository.findByEmail).toHaveBeenCalledWith(validInput.email);
       expect(userRepository.create).toHaveBeenCalledWith(validInput);
+      expect(userProfileService.createUserStats).toHaveBeenCalledWith(mockUser.id);
       expect(result).toEqual(mockUser);
     });
 

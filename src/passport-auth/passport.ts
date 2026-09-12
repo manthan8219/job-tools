@@ -1,5 +1,6 @@
 import passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
+import { Strategy as OpenIDConnectStrategy } from 'passport-openidconnect';
 import bcrypt from 'bcrypt';
 import { userRepository } from '../user/repositories/userRepository.js';
 
@@ -30,5 +31,52 @@ passport.use(
     }
   )
 );
+
+passport.use('zitadel', new OpenIDConnectStrategy({
+  issuer: process.env.ZITADEL_ISSUER || 'https://your-instance.zitadel.cloud',
+  authorizationURL: `${process.env.ZITADEL_ISSUER || 'https://your-instance.zitadel.cloud'}/oauth/v2/authorize`,
+  tokenURL: `${process.env.ZITADEL_ISSUER || 'https://your-instance.zitadel.cloud'}/oauth/v2/token`,
+  userInfoURL: `${process.env.ZITADEL_ISSUER || 'https://your-instance.zitadel.cloud'}/oidc/v1/userinfo`,
+  clientID: process.env.ZITADEL_CLIENT_ID || 'your-client-id',
+  clientSecret: process.env.ZITADEL_CLIENT_SECRET || 'your-client-secret',
+  callbackURL: process.env.ZITADEL_CALLBACK_URL || 'http://localhost:3000/auth/callback',
+  scope: ['openid', 'profile', 'email']
+}, async (issuer: any, profile: any, done: any) => {
+  try {
+    const email = profile.emails?.[0]?.value;
+    if (!email) {
+      return done(new Error("No email found in Zitadel profile"));
+    }
+
+    let user = await userRepository.findByEmail(email);
+    
+    if (!user) {
+      // Auto-register user from Zitadel
+      user = await userRepository.create({
+        email: email,
+        firstName: profile.name?.givenName || profile.displayName || 'Zitadel',
+        lastName: profile.name?.familyName || 'User',
+        passwordHash: '' // No password needed for OIDC users
+      });
+    }
+    return done(null, user);
+  } catch (error) {
+    return done(error);
+  }
+}));
+
+// Setup serialization for express-session
+passport.serializeUser((user: any, done) => {
+  done(null, user.id);
+});
+
+passport.deserializeUser(async (id: string, done) => {
+  try {
+    const user = await userRepository.findById(id);
+    done(null, user);
+  } catch (error) {
+    done(error, null);
+  }
+});
 
 export default passport;

@@ -1,5 +1,5 @@
 import { queryPostgres } from "../../db/index.js";
-import { JobApplication, UserStats } from "../models/profile.js";
+import { UserStats } from "../models/profile.js";
 import { logger } from "../../utils/index.js";
 import { randomUUID } from "node:crypto";
 
@@ -19,68 +19,77 @@ export class ProfileRepository {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
-      logger.info("job_applications table initialized");
+      
+      await queryPostgres(`
+        CREATE TABLE IF NOT EXISTS user_stats (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID UNIQUE NOT NULL,
+          total_applications INT DEFAULT 0,
+          interviewing INT DEFAULT 0,
+          offers INT DEFAULT 0,
+          rejected INT DEFAULT 0,
+          referrals_asked INT DEFAULT 0,
+          emails_sent INT DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          created_by VARCHAR(255),
+          updated_by VARCHAR(255),
+          deleted_at TIMESTAMP,
+          deleted_by VARCHAR(255)
+        )
+      `);
+      logger.info("Profile tables initialized");
     } catch (error) {
-      logger.error("Failed to initialize job_applications table", error);
+      logger.error("Failed to initialize profile tables", error);
     }
   }
 
-  async addApplication(app: JobApplication): Promise<JobApplication> {
-    const id = app.id || randomUUID();
-    const appliedDate = app.appliedDate ? new Date(app.appliedDate) : new Date();
-    
+  async createUserStats(userId: string): Promise<UserStats> {
     await queryPostgres(
-      `INSERT INTO job_applications (id, user_id, company_name, job_title, status, job_url, notes, applied_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, app.userId, app.companyName, app.jobTitle, app.status, app.jobUrl || null, app.notes || null, appliedDate]
+      `INSERT INTO user_stats (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
     );
-
-    return { ...app, id, appliedDate: appliedDate.toISOString() };
+    return this.getUserStats(userId);
   }
 
   async getUserStats(userId: string): Promise<UserStats> {
     const result = await queryPostgres(
-      `SELECT status, COUNT(*) as count FROM job_applications WHERE user_id = $1 GROUP BY status`,
+      `SELECT * FROM user_stats WHERE user_id = $1`,
       [userId]
     );
 
-    const stats: UserStats = {
-      totalApplications: 0,
-      interviewing: 0,
-      offers: 0,
-      rejected: 0,
-    };
-
-    for (const row of result.rows) {
-      const count = parseInt(row.count, 10);
-      stats.totalApplications += count;
-      if (row.status === 'interviewing') stats.interviewing += count;
-      if (row.status === 'offer') stats.offers += count;
-      if (row.status === 'rejected') stats.rejected += count;
+    if (result.rows.length === 0) {
+      // If no stats exist, create them or return default zeros
+      return {
+        userId,
+        totalApplications: 0,
+        interviewing: 0,
+        offers: 0,
+        rejected: 0,
+        referralsAsked: 0,
+        emailsSent: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
     }
 
-    return stats;
-  }
-  
-  async getApplications(userId: string): Promise<JobApplication[]> {
-     const result = await queryPostgres(
-      `SELECT id, user_id, company_name, job_title, status, job_url, notes, applied_date 
-       FROM job_applications 
-       WHERE user_id = $1 
-       ORDER BY applied_date DESC`,
-      [userId]
-    );
-    
-    return result.rows.map(row => ({
+    const row = result.rows[0];
+    return {
       id: row.id,
       userId: row.user_id,
-      companyName: row.company_name,
-      jobTitle: row.job_title,
-      status: row.status,
-      jobUrl: row.job_url,
-      notes: row.notes,
-      appliedDate: row.applied_date ? new Date(row.applied_date).toISOString() : undefined
-    }));
+      totalApplications: row.total_applications,
+      interviewing: row.interviewing,
+      offers: row.offers,
+      rejected: row.rejected,
+      referralsAsked: row.referrals_asked,
+      emailsSent: row.emails_sent,
+      createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+      updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
+      createdBy: row.created_by,
+      updatedBy: row.updated_by,
+      deletedAt: row.deleted_at ? new Date(row.deleted_at) : undefined,
+      deletedBy: row.deleted_by
+    };
   }
 }
 

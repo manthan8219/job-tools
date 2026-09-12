@@ -5,6 +5,10 @@ import { userProfileService } from "./user-profile/services/userProfileService.j
 import { logger } from "./utils/index.js";
 import http from "node:http";
 
+import express from "express";
+import session from "express-session";
+import passport from "./passport-auth/passport.js";
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 async function main() {
@@ -15,25 +19,62 @@ async function main() {
   
   // Initialize Postgres tables for user profile (job applications)
   await userProfileService.init();
+  
+  // Initialize Postgres tables for user job profile (search preferences)
+  const { jobProfileService } = await import("./user-job-profile/services/jobProfileService.js");
+  await jobProfileService.init();
 
-  // Create an HTTP Server for SSE
-  const httpServer = http.createServer(async (req, res) => {
+  const app = express();
+
+  // Setup session for Passport OIDC state and redirects
+  app.use(session({
+    secret: process.env.SESSION_SECRET || 'super-secret-mcp-session',
+    resave: false,
+    saveUninitialized: false
+  }));
+
+  // Initialize Passport and restore authentication state, if any, from the session
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  // Zitadel OAuth Routes
+  app.get('/auth/login', passport.authenticate('zitadel'));
+
+  app.get('/auth/callback', 
+    passport.authenticate('zitadel', { failureRedirect: '/auth/login-failed' }),
+    (req, res) => {
+      // Upon successful login, close the popup/tab so the user returns to the CLI
+      res.send(`
+        <html>
+          <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+            <h1>✅ Login Successful!</h1>
+            <p>You can close this window and return to your CLI or Agent.</p>
+            <script>setTimeout(() => window.close(), 3000);</script>
+          </body>
+        </html>
+      `);
+    }
+  );
+
+  app.get('/auth/login-failed', (req, res) => {
+    res.status(401).send("Authentication with Zitadel failed.");
+  });
+
+  // Provide a visible endpoint for browsers
+  app.get('/', (req, res) => {
+    res.json({
+      server: "job-applier-mcp",
+      status: "online",
+      message: "This is an MCP (Model Context Protocol) Server. Connect an MCP client using the SSE URL: /sse",
+      sseEndpoint: "https://job-tools.onrender.com/sse",
+      toolsAvailable: Object.keys((server as any).originalTools || {})
+    });
+  });
+
+  // Mastra SSE and Message Handling
+  const handleMastra = async (req: express.Request, res: express.Response) => {
     try {
-      const url = new URL(req.url || "", `http://localhost:${PORT}`);
-      
-      // Provide a visible endpoint for browsers
-      if (url.pathname === "/" || url.pathname === "/tools") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({
-          server: "job-applier-mcp",
-          status: "online",
-          message: "This is an MCP (Model Context Protocol) Server. To use these tools, connect an MCP client (like Cursor or Claude) using the SSE URL: /sse",
-          sseEndpoint: "https://job-tools.onrender.com/sse",
-          toolsAvailable: Object.keys((server as any).originalTools || {})
-        }, null, 2));
-      }
-
-      // Mastra handles both the /sse (GET) and /message (POST) paths internally
+      const url = new URL(req.originalUrl || "", `http://localhost:${PORT}`);
       await server.startSSE({
         url,
         ssePath: "/sse",
@@ -44,17 +85,21 @@ async function main() {
     } catch (err: any) {
       logger.error("SSE handling error", err);
       if (!res.headersSent) {
-        res.writeHead(500);
-        res.end("Internal Server Error");
+        res.status(500).send("Internal Server Error");
       }
     }
-  });
+  };
+
+  app.get('/sse', handleMastra);
+  app.post('/message', handleMastra);
+
+  const httpServer = http.createServer(app);
 
   httpServer.listen(PORT, () => {
     logger.info(`✅ MCP Server running over SSE!`);
     logger.info(`SSE URL: http://localhost:${PORT}/sse`);
     logger.info(`Message URL: http://localhost:${PORT}/message`);
-    logger.info(`To connect your MCP client (like Cursor/Claude), set it to SSE type and point to http://localhost:${PORT}/sse`);
+    logger.info(`Zitadel Login URL: http://localhost:${PORT}/auth/login`);
   });
 }
 

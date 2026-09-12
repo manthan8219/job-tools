@@ -1,8 +1,8 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { passportAuthService } from "./authService.js";
-import { LoginSchema } from "../auth/models/auth.js";
-import { UserSchema } from "../user/models/user.js";
+import { passportAuthService } from "../../passport-auth/authService.js";
+import { LoginSchema } from "../../auth/models/auth.js";
+import { UserSchema } from "../../user/models/user.js";
 
 const PassportAuthPayloadSchema = z.object({
   accessToken: z.string().describe("JWT access token for API calls"),
