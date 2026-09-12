@@ -17,6 +17,18 @@ async function main() {
     try {
       const url = new URL(req.url || "", `http://localhost:${PORT}`);
       
+      // Provide a visible endpoint for browsers
+      if (url.pathname === "/" || url.pathname === "/tools") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({
+          server: "job-applier-mcp",
+          status: "online",
+          message: "This is an MCP (Model Context Protocol) Server. To use these tools, connect an MCP client (like Cursor or Claude) using the SSE URL: /sse",
+          sseEndpoint: "https://job-tools.onrender.com/sse",
+          toolsAvailable: Object.keys((server as any).originalTools || {})
+        }, null, 2));
+      }
+
       // Mastra handles both the /sse (GET) and /message (POST) paths internally
       await server.startSSE({
         url,

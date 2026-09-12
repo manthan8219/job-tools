@@ -4,6 +4,7 @@ import { loginTool, registerTool } from "./tools/auth/authTools.js";
 import { createResumeTool, searchSimilarResumesTool } from "./tools/resume/resumeTools.js";
 import { convertMdToPdfTool, convertLatexToPdfTool } from "./tools/utilities/converterTools.js";
 import { checkOnboardingTool, markOnboardingCompletedTool } from "./tools/onboarding/onboardingTools.js";
+import { passportLoginTool, passportLogoutTool } from "./passport-auth/tools.js";
 
 export const server = new MCPServer({
   name: "job-applier-mcp",
@@ -19,5 +20,7 @@ export const server = new MCPServer({
     convertLatexToPdf: convertLatexToPdfTool,
     checkOnboardingCompleted: checkOnboardingTool,
     markOnboardingCompleted: markOnboardingCompletedTool,
+    passportLogin: passportLoginTool,
+    passportLogout: passportLogoutTool,
   },
 });
