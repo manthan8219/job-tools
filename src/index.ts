@@ -4,6 +4,7 @@ import { resumeRepository } from "./resume/repositories/resumeRepository.js";
 import { userProfileService } from "./user-profile/services/userProfileService.js";
 import { logger } from "./utils/index.js";
 import http from "node:http";
+import { SSEServerTransport } from "@modelcontextprotocol/server-legacy/sse";
 
 import express from "express";
 import session from "express-session";
@@ -118,40 +119,62 @@ async function main() {
     });
   });
 
-  // Mastra SSE and Message Handling
-  const handleMastra = async (req: express.Request, res: express.Response) => {
-    try {
-      if (req.method === 'POST') {
-        logger.info(`Received POST message on ${req.originalUrl}`);
-      } else {
-        logger.info(`Established new SSE connection on ${req.originalUrl}`);
-      }
+  // Multi-session SSE Transports Map to support concurrent and reconnecting MCP clients
+  const sseTransports = new Map<string, { transport: SSEServerTransport; serverInstance: any }>();
 
-      // Dynamically build the URL so it works on both localhost and Render
-      const host = req.get('host') || `localhost:${PORT}`;
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-      const url = new URL(req.originalUrl || "", `${protocol}://${host}`);
-      
-      await server.startSSE({
-        url,
-        // Prevent startSSE from treating POST requests as SSE stream connections
-        ssePath: req.method === 'GET' ? "/sse" : "/__sse_disabled__",
-        messagePath: req.method === 'POST' ? url.pathname : "/message", 
-        req,
-        res,
+  // GET /sse - Establishes the SSE stream
+  app.get('/sse', async (req: express.Request, res: express.Response) => {
+    try {
+      logger.info(`Established new SSE connection on ${req.originalUrl}`);
+      const transport = new SSEServerTransport('/message', res);
+      const serverInstance = (server as any).createServerInstance();
+      await serverInstance.connect(transport);
+
+      const sessionId = transport.sessionId;
+      sseTransports.set(sessionId, { transport, serverInstance });
+
+      res.on('close', () => {
+        logger.info(`SSE connection closed for session: ${sessionId}`);
+        sseTransports.delete(sessionId);
       });
     } catch (err: any) {
-      logger.error(`SSE handling error on ${req.method} ${req.path}`, err);
+      logger.error('Error establishing SSE connection:', err);
       if (!res.headersSent) {
-        res.status(500).send("Internal Server Error");
+        res.status(500).send('Internal Server Error');
+      }
+    }
+  });
+
+  // POST handler for MCP JSON-RPC messages (handles both /message and /sse)
+  const handlePostMessage = async (req: express.Request, res: express.Response) => {
+    try {
+      const sessionId = req.query.sessionId as string;
+      logger.info(`Received POST message on ${req.originalUrl} (sessionId: ${sessionId || 'none'})`);
+
+      // Find session by ID, or fall back to the most recent active session
+      let session = sessionId ? sseTransports.get(sessionId) : undefined;
+      if (!session && sseTransports.size > 0) {
+        session = Array.from(sseTransports.values()).pop();
+      }
+
+      if (!session) {
+        logger.warn(`No active SSE session found for message on ${req.originalUrl}`);
+        res.status(503).send("SSE connection not established");
+        return;
+      }
+
+      await session.transport.handlePostMessage(req, res);
+    } catch (err: any) {
+      logger.error(`Error handling POST message on ${req.originalUrl}:`, err);
+      if (!res.headersSent) {
+        res.status(500).send('Internal Server Error');
       }
     }
   };
 
-  // Support GET /sse (stream), POST /sse (direct message), and POST /message (standard MCP SSE)
-  app.get('/sse', handleMastra);
-  app.post('/sse', handleMastra);
-  app.post('/message', handleMastra);
+  // Support POST /message (standard MCP SSE) and POST /sse (direct message)
+  app.post('/message', handlePostMessage);
+  app.post('/sse', handlePostMessage);
 
   const httpServer = http.createServer(app);
 
