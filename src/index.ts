@@ -8,6 +8,7 @@ import http from "node:http";
 import express from "express";
 import session from "express-session";
 import passport from "./passport-auth/passport.js";
+import jwt from "jsonwebtoken";
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
@@ -54,12 +55,11 @@ async function main() {
       
       // If the CLI provided a redirect URI, send the tokens back to the local CLI server
       if (cliRedirectUri && user) {
-        const jwt = await import('jsonwebtoken');
         const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-do-not-use-in-prod';
         const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret';
 
-        const accessToken = jwt.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
-        const refreshToken = jwt.default.sign({ userId: user.id, type: 'refresh' }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+        const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
+        const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
         
         const redirectUrl = new URL(cliRedirectUri);
         redirectUrl.searchParams.set('accessToken', accessToken);

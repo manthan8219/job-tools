@@ -32,6 +32,8 @@ passport.use(
   )
 );
 
+import jwt from 'jsonwebtoken';
+
 passport.use('zitadel', new OpenIDConnectStrategy({
   issuer: process.env.ZITADEL_ISSUER || 'https://your-instance.zitadel.cloud',
   authorizationURL: `${process.env.ZITADEL_ISSUER || 'https://your-instance.zitadel.cloud'}/oauth/v2/authorize`,
@@ -44,8 +46,7 @@ passport.use('zitadel', new OpenIDConnectStrategy({
 }, async (issuer: any, profile: any, context: any, idToken: any, accessToken: any, refreshToken: any, params: any, done: any) => {
   try {
     // 1. Decode the raw ID Token. Zitadel ALWAYS puts the email here.
-    const jwt = await import('jsonwebtoken');
-    const decodedToken = jwt.default.decode(idToken) as any || {};
+    const decodedToken = (idToken ? jwt.decode(idToken) : {}) as any || {};
 
     // 2. Try to find the email in the decoded token, or fallback to the profile.
     const email = decodedToken.email || profile.emails?.[0]?.value || profile._json?.email || profile._json?.preferred_username;
