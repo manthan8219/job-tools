@@ -32,6 +32,18 @@ async function main() {
 
   const app = express();
 
+  // CORS headers so web/desktop IDE clients can communicate without transport rejection
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(200).end();
+      return;
+    }
+    next();
+  });
+
   // Setup session for Passport OIDC state and redirects
   app.use(session({
     secret: process.env.SESSION_SECRET || 'super-secret-mcp-session',
@@ -124,18 +136,42 @@ async function main() {
 
   // GET /sse - Establishes the SSE stream
   app.get('/sse', async (req: express.Request, res: express.Response) => {
+    // If request contains mcp-session-id header, handle via Streamable HTTP
+    if (req.headers['mcp-session-id']) {
+      try {
+        const url = new URL(req.originalUrl || req.url, `http://${req.headers.host || 'localhost'}`);
+        return await (server as any).startHTTP({
+          url,
+          httpPath: '/sse',
+          req,
+          res
+        });
+      } catch (err: any) {
+        logger.error('Error handling Streamable HTTP GET /sse:', err);
+        if (!res.headersSent) {
+          res.status(500).send('Internal Server Error');
+        }
+        return;
+      }
+    }
+
     try {
       logger.info(`Established new SSE connection on ${req.originalUrl}`);
       const transport = new SSEServerTransport('/message', res);
-      const serverInstance = (server as any).createServerInstance();
-      await serverInstance.connect(transport);
-
       const sessionId = transport.sessionId;
+      const serverInstance = (server as any).createServerInstance();
+
+      // Register session BEFORE awaiting connect so incoming POST messages don't hit 503
       sseTransports.set(sessionId, { transport, serverInstance });
+
+      await serverInstance.connect(transport);
 
       res.on('close', () => {
         logger.info(`SSE connection closed for session: ${sessionId}`);
-        sseTransports.delete(sessionId);
+        // Keep session alive for 30s before removing to avoid race condition with in-flight/reconnecting requests
+        setTimeout(() => {
+          sseTransports.delete(sessionId);
+        }, 30000);
       });
     } catch (err: any) {
       logger.error('Error establishing SSE connection:', err);
@@ -148,13 +184,25 @@ async function main() {
   // POST handler for MCP JSON-RPC messages (handles both /message and /sse)
   const handlePostMessage = async (req: express.Request, res: express.Response) => {
     try {
-      const sessionId = req.query.sessionId as string;
+      let sessionId = req.query.sessionId as string;
       logger.info(`Received POST message on ${req.originalUrl} (sessionId: ${sessionId || 'none'})`);
 
-      // Find session by ID, or fall back to the most recent active session
       let session = sessionId ? sseTransports.get(sessionId) : undefined;
       if (!session && sseTransports.size > 0) {
         session = Array.from(sseTransports.values()).pop();
+      }
+
+      // If session is not immediately found, wait briefly (up to 2 seconds) for SSE handshake to complete
+      if (!session) {
+        for (let i = 0; i < 20; i++) {
+          await new Promise((r) => setTimeout(r, 100));
+          sessionId = req.query.sessionId as string;
+          session = sessionId ? sseTransports.get(sessionId) : undefined;
+          if (!session && sseTransports.size > 0) {
+            session = Array.from(sseTransports.values()).pop();
+          }
+          if (session) break;
+        }
       }
 
       if (!session) {
@@ -172,9 +220,34 @@ async function main() {
     }
   };
 
-  // Support POST /message (standard MCP SSE) and POST /sse (direct message)
+  // Support POST /message (standard MCP SSE)
   app.post('/message', handlePostMessage);
-  app.post('/sse', handlePostMessage);
+
+  // Support POST /sse (handles Streamable HTTP for Antigravity/Cursor as well as SSE postback)
+  app.post('/sse', async (req: express.Request, res: express.Response) => {
+    const sessionId = req.query.sessionId as string;
+    if (sessionId && sseTransports.has(sessionId)) {
+      return handlePostMessage(req, res);
+    }
+
+    try {
+      if (!req.headers['accept'] || !req.headers['accept'].includes('text/event-stream')) {
+        req.headers['accept'] = 'application/json, text/event-stream';
+      }
+      const url = new URL(req.originalUrl || req.url, `http://${req.headers.host || 'localhost'}`);
+      await (server as any).startHTTP({
+        url,
+        httpPath: '/sse',
+        req,
+        res
+      });
+    } catch (err: any) {
+      logger.error(`Error handling Streamable HTTP on /sse:`, err);
+      if (!res.headersSent) {
+        res.status(500).send('Internal Server Error');
+      }
+    }
+  });
 
   const httpServer = http.createServer(app);
 
