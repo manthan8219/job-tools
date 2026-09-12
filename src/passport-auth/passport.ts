@@ -52,9 +52,13 @@ passport.use('zitadel', new OpenIDConnectStrategy({
     const email = decodedToken.email || profile.emails?.[0]?.value || profile._json?.email || profile._json?.preferred_username;
     
     if (!email) {
-      console.error("DEBUG: Decoded ID Token:", JSON.stringify(decodedToken, null, 2));
-      console.error("DEBUG: Profile:", JSON.stringify(profile, null, 2));
-      return done(new Error("No email found in Zitadel profile. Make sure your Zitadel user has an email address."));
+      const debugInfo = JSON.stringify({
+        decodedIdToken: decodedToken,
+        profile: profile,
+        rawIdTokenString: !!idToken
+      });
+      console.error("DEBUG INFO:", debugInfo);
+      return done(new Error(`No email found in Zitadel profile. Make sure your Zitadel user has an email address. DEBUG PAYLOAD: ${debugInfo}`));
     }
 
     let user = await userRepository.findByEmail(email);
