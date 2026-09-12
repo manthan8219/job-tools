@@ -41,13 +41,18 @@ passport.use('zitadel', new OpenIDConnectStrategy({
   clientSecret: process.env.ZITADEL_CLIENT_SECRET || 'your-client-secret',
   callbackURL: process.env.ZITADEL_CALLBACK_URL || 'http://localhost:3000/auth/callback',
   scope: ['openid', 'profile', 'email']
-}, async (issuer: any, profile: any, done: any) => {
+}, async (issuer: any, profile: any, context: any, idToken: any, accessToken: any, refreshToken: any, params: any, done: any) => {
   try {
-    // Zitadel / OIDC providers can put the email in a few different places depending on how the passport strategy maps it
-    const email = profile.emails?.[0]?.value || profile._json?.email || profile._json?.preferred_username;
+    // 1. Decode the raw ID Token. Zitadel ALWAYS puts the email here.
+    const jwt = await import('jsonwebtoken');
+    const decodedToken = jwt.default.decode(idToken) as any || {};
+
+    // 2. Try to find the email in the decoded token, or fallback to the profile.
+    const email = decodedToken.email || profile.emails?.[0]?.value || profile._json?.email || profile._json?.preferred_username;
     
     if (!email) {
-      console.error("DEBUG: Raw Zitadel Profile payload without email:", JSON.stringify(profile, null, 2));
+      console.error("DEBUG: Decoded ID Token:", JSON.stringify(decodedToken, null, 2));
+      console.error("DEBUG: Profile:", JSON.stringify(profile, null, 2));
       return done(new Error("No email found in Zitadel profile. Make sure your Zitadel user has an email address."));
     }
 
@@ -57,8 +62,8 @@ passport.use('zitadel', new OpenIDConnectStrategy({
       // Auto-register user from Zitadel
       user = await userRepository.create({
         email: email,
-        firstName: profile.name?.givenName || profile.displayName || 'Zitadel',
-        lastName: profile.name?.familyName || 'User',
+        firstName: decodedToken.given_name || profile.name?.givenName || profile.displayName || 'Zitadel',
+        lastName: decodedToken.family_name || profile.name?.familyName || 'User',
         passwordHash: '' // No password needed for OIDC users
       });
     }
