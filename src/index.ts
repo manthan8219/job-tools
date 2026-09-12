@@ -121,16 +121,23 @@ async function main() {
   // Mastra SSE and Message Handling
   const handleMastra = async (req: express.Request, res: express.Response) => {
     try {
-      const url = new URL(req.originalUrl || "", `http://localhost:${PORT}`);
+      if (req.method === 'POST') {
+        logger.info(`Received POST message on ${req.originalUrl}`);
+      } else {
+        logger.info(`Established new SSE connection on ${req.originalUrl}`);
+      }
+
+      const url = new URL(req.originalUrl || "", `https://job-tools.onrender.com`);
+      
       await server.startSSE({
         url,
         ssePath: "/sse",
-        messagePath: req.originalUrl || "/sse", // Support whatever path the client POSTs to
+        messagePath: "/sse", // MUST be the exact base path, no query params!
         req,
         res,
       });
     } catch (err: any) {
-      logger.error("SSE handling error", err);
+      logger.error(`SSE handling error on ${req.method} ${req.path}`, err);
       if (!res.headersSent) {
         res.status(500).send("Internal Server Error");
       }
