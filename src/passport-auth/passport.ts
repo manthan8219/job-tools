@@ -43,9 +43,12 @@ passport.use('zitadel', new OpenIDConnectStrategy({
   scope: ['openid', 'profile', 'email']
 }, async (issuer: any, profile: any, done: any) => {
   try {
-    const email = profile.emails?.[0]?.value;
+    // Zitadel / OIDC providers can put the email in a few different places depending on how the passport strategy maps it
+    const email = profile.emails?.[0]?.value || profile._json?.email || profile._json?.preferred_username;
+    
     if (!email) {
-      return done(new Error("No email found in Zitadel profile"));
+      console.error("DEBUG: Raw Zitadel Profile payload without email:", JSON.stringify(profile, null, 2));
+      return done(new Error("No email found in Zitadel profile. Make sure your Zitadel user has an email address."));
     }
 
     let user = await userRepository.findByEmail(email);

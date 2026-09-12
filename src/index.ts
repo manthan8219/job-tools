@@ -38,12 +38,42 @@ async function main() {
   app.use(passport.session());
 
   // Zitadel OAuth Routes
-  app.get('/auth/login', passport.authenticate('zitadel'));
+  app.get('/auth/login', (req, res, next) => {
+    // Save the CLI redirect URI to the session if provided
+    if (req.query.redirect_uri) {
+      (req.session as any).cliRedirectUri = req.query.redirect_uri;
+    }
+    passport.authenticate('zitadel')(req, res, next);
+  });
 
   app.get('/auth/callback', 
     passport.authenticate('zitadel', { failureRedirect: '/auth/login-failed' }),
-    (req, res) => {
-      // Upon successful login, close the popup/tab so the user returns to the CLI
+    async (req, res) => {
+      const user = req.user as any;
+      const cliRedirectUri = (req.session as any).cliRedirectUri;
+      
+      // If the CLI provided a redirect URI, send the tokens back to the local CLI server
+      if (cliRedirectUri && user) {
+        const jwt = await import('jsonwebtoken');
+        const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-do-not-use-in-prod';
+        const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret';
+
+        const accessToken = jwt.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
+        const refreshToken = jwt.default.sign({ userId: user.id, type: 'refresh' }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+        
+        const redirectUrl = new URL(cliRedirectUri);
+        redirectUrl.searchParams.set('accessToken', accessToken);
+        redirectUrl.searchParams.set('refreshToken', refreshToken);
+        redirectUrl.searchParams.set('userId', user.id);
+        redirectUrl.searchParams.set('email', user.email);
+        redirectUrl.searchParams.set('firstName', user.firstName || 'User');
+        
+        delete (req.session as any).cliRedirectUri;
+        
+        return res.redirect(redirectUrl.toString());
+      }
+
+      // Fallback if logged in via standard browser without CLI redirect
       res.send(`
         <html>
           <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
