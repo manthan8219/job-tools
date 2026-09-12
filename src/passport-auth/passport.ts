@@ -64,10 +64,14 @@ passport.use('zitadel', new OpenIDConnectStrategy({
     let user = await userRepository.findByEmail(email);
     
     if (!user) {
+      // Fallback name from email if Zitadel didn't provide given_name
+      const emailPrefix = email.split('@')[0];
+      const defaultFirstName = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+
       // Auto-register user from Zitadel
       user = await userRepository.create({
         email: email,
-        firstName: decodedToken.given_name || profile.name?.givenName || profile.displayName || 'Zitadel',
+        firstName: decodedToken.given_name || profile.name?.givenName || profile.displayName || defaultFirstName,
         lastName: decodedToken.family_name || profile.name?.familyName || 'User',
         passwordHash: '' // No password needed for OIDC users
       });
