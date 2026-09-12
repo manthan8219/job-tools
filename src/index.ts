@@ -125,7 +125,7 @@ async function main() {
       await server.startSSE({
         url,
         ssePath: "/sse",
-        messagePath: "/message",
+        messagePath: req.originalUrl || "/sse", // Support whatever path the client POSTs to
         req,
         res,
       });
@@ -137,7 +137,11 @@ async function main() {
     }
   };
 
+  // Support both GET for the stream and POST for messages on /sse
   app.get('/sse', handleMastra);
+  app.post('/sse', handleMastra);
+  
+  // Keep /message for backwards compatibility
   app.post('/message', handleMastra);
 
   const httpServer = http.createServer(app);
