@@ -47,44 +47,58 @@ async function main() {
     passport.authenticate('zitadel')(req, res, next);
   });
 
-  app.get('/auth/callback', 
-    passport.authenticate('zitadel', { failureRedirect: '/auth/login-failed' }),
-    async (req, res) => {
-      const user = req.user as any;
-      const cliRedirectUri = (req.session as any).cliRedirectUri;
-      
-      // If the CLI provided a redirect URI, send the tokens back to the local CLI server
-      if (cliRedirectUri && user) {
-        const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-do-not-use-in-prod';
-        const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret';
-
-        const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
-        const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
-        
-        const redirectUrl = new URL(cliRedirectUri);
-        redirectUrl.searchParams.set('accessToken', accessToken);
-        redirectUrl.searchParams.set('refreshToken', refreshToken);
-        redirectUrl.searchParams.set('userId', user.id);
-        redirectUrl.searchParams.set('email', user.email);
-        redirectUrl.searchParams.set('firstName', user.firstName || 'User');
-        
-        delete (req.session as any).cliRedirectUri;
-        
-        return res.redirect(redirectUrl.toString());
+  app.get('/auth/callback', (req, res, next) => {
+    passport.authenticate('zitadel', async (err: any, user: any, info: any) => {
+      if (err) {
+        console.error("Passport Internal Error:", err);
+        return res.status(500).send(`Passport Internal Error: ${err.message || err}`);
       }
+      if (!user) {
+        console.error("Zitadel Authentication Failed. Info:", info);
+        return res.status(401).send(`Authentication Failed! Zitadel rejected the login.<br><br>Reason: ${JSON.stringify(info)}`);
+      }
+      
+      // If successful, establish the session
+      req.logIn(user, async (loginErr) => {
+        if (loginErr) {
+          return res.status(500).send(`Session Login Error: ${loginErr.message}`);
+        }
 
-      // Fallback if logged in via standard browser without CLI redirect
-      res.send(`
-        <html>
-          <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
-            <h1>✅ Login Successful!</h1>
-            <p>You can close this window and return to your CLI or Agent.</p>
-            <script>setTimeout(() => window.close(), 3000);</script>
-          </body>
-        </html>
-      `);
-    }
-  );
+        const cliRedirectUri = (req.session as any).cliRedirectUri;
+        
+        // If the CLI provided a redirect URI, send the tokens back to the local CLI server
+        if (cliRedirectUri && user) {
+          const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-do-not-use-in-prod';
+          const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret';
+
+          const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
+          const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+          
+          const redirectUrl = new URL(cliRedirectUri);
+          redirectUrl.searchParams.set('accessToken', accessToken);
+          redirectUrl.searchParams.set('refreshToken', refreshToken);
+          redirectUrl.searchParams.set('userId', user.id);
+          redirectUrl.searchParams.set('email', user.email);
+          redirectUrl.searchParams.set('firstName', user.firstName || 'User');
+          
+          delete (req.session as any).cliRedirectUri;
+          
+          return res.redirect(redirectUrl.toString());
+        }
+
+        // Fallback if logged in via standard browser without CLI redirect
+        res.send(`
+          <html>
+            <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+              <h1>✅ Login Successful!</h1>
+              <p>You can close this window and return to your CLI or Agent.</p>
+              <script>setTimeout(() => window.close(), 3000);</script>
+            </body>
+          </html>
+        `);
+      });
+    })(req, res, next);
+  });
 
   app.get('/auth/login-failed', (req, res) => {
     res.status(401).send("Authentication with Zitadel failed.");
