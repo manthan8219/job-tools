@@ -1,6 +1,9 @@
 import { BaseJobScraperAdapter } from "../baseAdapter.js";
 import { ScrapeQuery, ScrapeResult, ScrapedJob } from "../types.js";
+import { DEFAULT_GREENHOUSE_COMPANIES, NamedBoardCompany } from "../data/companies.js";
+import { runWithConcurrencySettled } from "../utils/concurrencyUtils.js";
 import { isLocationInCountry } from "../utils/countryUtils.js";
+import { matchesTitle } from "../utils/matcherUtils.js";
 import { logger } from "../../utils/index.js";
 
 export interface GreenhouseJobItem {
@@ -31,21 +34,21 @@ export class GreenhouseJobScraperAdapter extends BaseJobScraperAdapter {
   readonly name = "GreenhouseJobScraperAdapter";
   readonly source = "greenhouse";
 
-  private readonly companies: string[];
+  private readonly companies: Array<{ name: string; board: string }>;
   private readonly timeoutMs: number;
+  private readonly concurrency: number;
 
-  constructor(options?: { defaultCompanies?: string[]; timeoutMs?: number }) {
+  constructor(options?: { defaultCompanies?: Array<string | NamedBoardCompany>; timeoutMs?: number; concurrency?: number }) {
     super();
-    this.companies = options?.defaultCompanies ?? [
-      "gitlab",
-      "stripe",
-      "celonis",
-      "n26",
-      "hootsuite",
-      "figma",
-      "datadog",
-    ];
+    if (options?.defaultCompanies) {
+      this.companies = options.defaultCompanies.map((c) =>
+        typeof c === "string" ? { name: c, board: c } : c
+      );
+    } else {
+      this.companies = DEFAULT_GREENHOUSE_COMPANIES;
+    }
     this.timeoutMs = options?.timeoutMs ?? 15000;
+    this.concurrency = options?.concurrency ?? 5;
   }
 
   isConfigured(): boolean {
@@ -54,67 +57,65 @@ export class GreenhouseJobScraperAdapter extends BaseJobScraperAdapter {
 
   protected async executeScrape(query: ScrapeQuery): Promise<ScrapeResult> {
     const allJobs: ScrapedJob[] = [];
-    const searchTerms = (query.query || query.titles?.join(" ") || "").toLowerCase();
 
-    for (const company of this.companies) {
-      const url = `https://boards-api.greenhouse.io/v1/boards/${company}/jobs?content=true`;
-      logger.info(`[${this.name}] Fetching board for company '${company}': ${url}`);
+    await runWithConcurrencySettled(
+      this.companies,
+      async (company) => {
+        const url = `https://boards-api.greenhouse.io/v1/boards/${company.board}/jobs?content=true`;
+        logger.info(`[${this.name}] Fetching board for company '${company.name}': ${url}`);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
-      try {
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Accept": "application/json",
-            "User-Agent": "JobTools-Scraper/1.0",
-          },
-          signal: controller.signal,
-        });
+        try {
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              "Accept": "application/json",
+              "User-Agent": "JobTools-Scraper/1.0",
+            },
+            signal: controller.signal,
+          });
 
-        if (!response.ok) {
-          logger.warn(`[${this.name}] Failed to fetch company '${company}' (HTTP ${response.status})`);
-          continue;
-        }
+          if (!response.ok) {
+            logger.warn(`[${this.name}] Failed to fetch company '${company.name}' (HTTP ${response.status})`);
+            return;
+          }
 
-        const data = (await response.json()) as GreenhouseBoardResponse;
-        const rawJobs = data.jobs || [];
+          const data = (await response.json()) as GreenhouseBoardResponse;
+          const rawJobs = data.jobs || [];
 
-        for (const item of rawJobs) {
-          if (searchTerms) {
-            const searchWords = searchTerms.split(/\s+/).filter(Boolean);
-            const matches = searchWords.every(
-              (word) =>
-                item.title.toLowerCase().includes(word) ||
-                item.departments?.some((d) => d.name.toLowerCase().includes(word)) ||
-                (item.content && item.content.toLowerCase().includes(word))
-            );
-            if (!matches) {
+          for (const item of rawJobs) {
+            if (!matchesTitle(item.title, query.query, query.titles) && !matchesTitle(company.name, query.query, query.titles)) {
+              const departmentMatch = item.departments?.some((d) => matchesTitle(d.name, query.query, query.titles));
+              const contentMatch = item.content && matchesTitle(item.content, query.query, query.titles);
+              if (!departmentMatch && !contentMatch) {
+                continue;
+              }
+            }
+
+            const locationName = item.location?.name || "";
+            const isRemote = locationName.toLowerCase().includes("remote") || item.title.toLowerCase().includes("remote");
+
+            if (query.worldwideOnly && !isRemote) {
               continue;
             }
+
+            // Abroad / country filtering
+            if (query.country && !isLocationInCountry(locationName, query.country)) {
+              continue;
+            }
+
+            allJobs.push(this.mapToScrapedJob(item, company.name, isRemote));
           }
-
-          const locationName = item.location?.name || "";
-          const isRemote = locationName.toLowerCase().includes("remote") || item.title.toLowerCase().includes("remote");
-
-          if (query.worldwideOnly && !isRemote) {
-            continue;
-          }
-
-          // Abroad / country filtering
-          if (query.country && !isLocationInCountry(locationName, query.country)) {
-            continue;
-          }
-
-          allJobs.push(this.mapToScrapedJob(item, company, isRemote));
+        } catch (err: any) {
+          logger.error(`[${this.name}] Error fetching company '${company.name}': ${err.message}`);
+        } finally {
+          clearTimeout(timeoutId);
         }
-      } catch (err: any) {
-        logger.error(`[${this.name}] Error fetching company '${company}': ${err.message}`);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    }
+      },
+      this.concurrency
+    );
 
     const limit = query.limit ?? 20;
     const paginatedJobs = allJobs.slice(0, limit);

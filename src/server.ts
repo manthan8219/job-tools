@@ -42,6 +42,10 @@ import {
   getResumeDownloadUrlTool,
   deleteResumeFileTool,
 } from "./tools/storage/storageTools.js";
+import {
+  applyToJobTool,
+  detectJobAtsTool,
+} from "./tools/appliers/applyTools.js";
 
 export const server = new MCPServer({
   name: "job-applier-mcp",
@@ -84,6 +88,8 @@ export const server = new MCPServer({
     generateResumeUploadUrl: generateResumeUploadUrlTool,
     getResumeDownloadUrl: getResumeDownloadUrlTool,
     deleteResumeFile: deleteResumeFileTool,
+    applyToJob: applyToJobTool,
+    detectJobAts: detectJobAtsTool,
   },
 });
 

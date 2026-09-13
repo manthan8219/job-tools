@@ -1,6 +1,9 @@
 import { BaseJobScraperAdapter } from "../baseAdapter.js";
 import { ScrapeQuery, ScrapeResult, ScrapedJob } from "../types.js";
+import { DEFAULT_ASHBY_COMPANIES, NamedSlugCompany } from "../data/companies.js";
+import { runWithConcurrencySettled } from "../utils/concurrencyUtils.js";
 import { isLocationInCountry } from "../utils/countryUtils.js";
+import { matchesTitle } from "../utils/matcherUtils.js";
 import { logger } from "../../utils/index.js";
 
 export interface AshbyJobItem {
@@ -25,20 +28,21 @@ export class AshbyJobScraperAdapter extends BaseJobScraperAdapter {
   readonly name = "AshbyJobScraperAdapter";
   readonly source = "ashby";
 
-  private readonly companies: string[];
+  private readonly companies: NamedSlugCompany[];
   private readonly timeoutMs: number;
+  private readonly concurrency: number;
 
-  constructor(options?: { defaultCompanies?: string[]; timeoutMs?: number }) {
+  constructor(options?: { defaultCompanies?: Array<string | NamedSlugCompany>; timeoutMs?: number; concurrency?: number }) {
     super();
-    this.companies = options?.defaultCompanies ?? [
-      "ramp",
-      "notion",
-      "linear",
-      "1password",
-      "wealthsimple",
-      "anysphere",
-    ];
+    if (options?.defaultCompanies) {
+      this.companies = options.defaultCompanies.map((c) =>
+        typeof c === "string" ? { name: c, slug: c } : c
+      );
+    } else {
+      this.companies = DEFAULT_ASHBY_COMPANIES;
+    }
     this.timeoutMs = options?.timeoutMs ?? 15000;
+    this.concurrency = options?.concurrency ?? 5;
   }
 
   isConfigured(): boolean {
@@ -47,65 +51,63 @@ export class AshbyJobScraperAdapter extends BaseJobScraperAdapter {
 
   protected async executeScrape(query: ScrapeQuery): Promise<ScrapeResult> {
     const allJobs: ScrapedJob[] = [];
-    const searchTerms = (query.query || query.titles?.join(" ") || "").toLowerCase();
 
-    for (const company of this.companies) {
-      const url = `https://api.ashbyhq.com/posting-api/job-board/${company}`;
-      logger.info(`[${this.name}] Fetching board for company '${company}': ${url}`);
+    await runWithConcurrencySettled(
+      this.companies,
+      async (company) => {
+        const url = `https://api.ashbyhq.com/posting-api/job-board/${company.slug}`;
+        logger.info(`[${this.name}] Fetching board for company '${company.name}': ${url}`);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
-      try {
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Accept": "application/json",
-            "User-Agent": "JobTools-Scraper/1.0",
-          },
-          signal: controller.signal,
-        });
+        try {
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              "Accept": "application/json",
+              "User-Agent": "JobTools-Scraper/1.0",
+            },
+            signal: controller.signal,
+          });
 
-        if (!response.ok) {
-          logger.warn(`[${this.name}] Failed to fetch company '${company}' (HTTP ${response.status})`);
-          continue;
-        }
+          if (!response.ok) {
+            logger.warn(`[${this.name}] Failed to fetch company '${company.name}' (HTTP ${response.status})`);
+            return;
+          }
 
-        const data = (await response.json()) as AshbyBoardResponse;
-        const rawJobs = data.jobs || [];
+          const data = (await response.json()) as AshbyBoardResponse;
+          const rawJobs = data.jobs || [];
 
-        for (const item of rawJobs) {
-          if (searchTerms) {
-            const searchWords = searchTerms.split(/\s+/).filter(Boolean);
-            const matches = searchWords.every(
-              (word) =>
-                item.title.toLowerCase().includes(word) ||
-                item.team?.toLowerCase().includes(word) ||
-                item.department?.toLowerCase().includes(word) ||
-                (item.descriptionHtml && item.descriptionHtml.toLowerCase().includes(word))
-            );
-            if (!matches) {
+          for (const item of rawJobs) {
+            if (!matchesTitle(item.title, query.query, query.titles) && !matchesTitle(company.name, query.query, query.titles)) {
+              const teamMatch = item.team && matchesTitle(item.team, query.query, query.titles);
+              const deptMatch = item.department && matchesTitle(item.department, query.query, query.titles);
+              const descMatch = item.descriptionHtml && matchesTitle(item.descriptionHtml, query.query, query.titles);
+              if (!teamMatch && !deptMatch && !descMatch) {
+                continue;
+              }
+            }
+
+            if (query.worldwideOnly && !item.isRemote) {
               continue;
             }
-          }
 
-          if (query.worldwideOnly && !item.isRemote) {
-            continue;
-          }
+            // Abroad / country filtering
+            if (query.country && !isLocationInCountry(item.location, query.country)) {
+              continue;
+            }
 
-          // Abroad / country filtering
-          if (query.country && !isLocationInCountry(item.location, query.country)) {
-            continue;
+            allJobs.push(this.mapToScrapedJob(item, company.name, company.slug));
           }
-
-          allJobs.push(this.mapToScrapedJob(item, company));
+        } catch (err: any) {
+          logger.error(`[${this.name}] Error fetching company '${company.name}': ${err.message}`);
+        } finally {
+          clearTimeout(timeoutId);
         }
-      } catch (err: any) {
-        logger.error(`[${this.name}] Error fetching company '${company}': ${err.message}`);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    }
+      },
+      this.concurrency
+    );
 
     const limit = query.limit ?? 20;
     const paginatedJobs = allJobs.slice(0, limit);
@@ -120,7 +122,7 @@ export class AshbyJobScraperAdapter extends BaseJobScraperAdapter {
     };
   }
 
-  private mapToScrapedJob(item: AshbyJobItem, company: string): ScrapedJob {
+  private mapToScrapedJob(item: AshbyJobItem, companyName: string, companySlug: string): ScrapedJob {
     const { minSalary, maxSalary, currency } = this.parseCompensation(item.compensationTierSummary);
 
     const categories: string[] = [];
@@ -130,10 +132,10 @@ export class AshbyJobScraperAdapter extends BaseJobScraperAdapter {
     return {
       id: `ashby-${item.id}`,
       title: item.title,
-      company,
+      company: companyName,
       location: item.location || (item.isRemote ? "Remote" : "On-site"),
       description: item.descriptionHtml,
-      url: item.applyUrl || item.jobUrl || `https://jobs.ashbyhq.com/${company}/${item.id}`,
+      url: item.applyUrl || item.jobUrl || `https://jobs.ashbyhq.com/${companySlug}/${item.id}`,
       source: this.source,
       employmentType: "full-time",
       workArrangement: item.isRemote ? "remote" : "on-site",
@@ -151,7 +153,6 @@ export class AshbyJobScraperAdapter extends BaseJobScraperAdapter {
   private parseCompensation(tierSummary?: string): { minSalary?: number; maxSalary?: number; currency?: string } {
     if (!tierSummary) return {};
 
-    // E.g. "$150,000 - $200,000 USD" or "£80,000 - £100,000"
     const currency = tierSummary.includes("USD") ? "USD" : tierSummary.includes("EUR") ? "EUR" : tierSummary.includes("GBP") ? "GBP" : "USD";
     const numRegex = /\$?(\d{2,3}(?:,\d{3})+)/g;
     const matches: number[] = [];
