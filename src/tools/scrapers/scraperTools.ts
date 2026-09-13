@@ -12,6 +12,9 @@ import {
   JobScraperAdapter,
   ScrapedJob,
 } from "../../scrapers/index.js";
+import { JobService } from "../../jobs/services/jobService.js";
+
+const jobService = new JobService();
 
 const adaptersMap: Record<string, JobScraperAdapter> = {
   himalayas: new HimalayasJobScraperAdapter(),
@@ -46,6 +49,7 @@ export const scrapeJobsTool = createTool({
     limit: z.number().int().positive().max(50).default(20).describe("Max jobs per source (max 50)"),
     page: z.number().int().positive().default(1).describe("Page number for search results"),
     maxPages: z.number().int().positive().default(1).describe("Number of pages to auto-paginate through (default 1)"),
+    saveToDatabase: z.boolean().default(false).optional().describe("If true, automatically ingests and deduplicates scraped jobs into the PostgreSQL jobs database"),
   }),
   execute: async (input) => {
     try {
@@ -96,6 +100,18 @@ export const scrapeJobsTool = createTool({
       }
 
       const deduplicatedJobs = Array.from(jobsMap.values());
+      let savedToDbCount = 0;
+
+      if (input.saveToDatabase) {
+        for (const job of deduplicatedJobs) {
+          try {
+            await jobService.ingestScrapedJob(job);
+            savedToDbCount++;
+          } catch (ingestErr) {
+            // Continue ingesting remainder
+          }
+        }
+      }
 
       return {
         success: true,
@@ -104,6 +120,7 @@ export const scrapeJobsTool = createTool({
           sourcesQueried: selectedSources,
           totalFound,
           jobsCount: deduplicatedJobs.length,
+          savedToDbCount: input.saveToDatabase ? savedToDbCount : undefined,
           sourceSummaries,
           jobs: deduplicatedJobs,
         },

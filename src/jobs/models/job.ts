@@ -104,6 +104,7 @@ export interface JobSearchResult {
     locationName?: string;
     locationPath?: string;
     countryCode?: string;
+    companyWebsiteUrl?: string;
   })[];
   totalFound: number;
   limit: number;

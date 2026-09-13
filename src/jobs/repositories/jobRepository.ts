@@ -273,8 +273,11 @@ export class JobRepository {
 
     const dataSql = `
       SELECT
-        j.id, j.job_key AS "jobKey", j.company_id AS "companyId", j.external_id AS "externalId", j.source, j.title, j.company,
-        j.company_slug AS "companySlug", j.company_logo_url AS "companyLogoUrl",
+        j.id, j.job_key AS "jobKey", j.company_id AS "companyId", j.external_id AS "externalId", j.source, j.title,
+        COALESCE(c.name, j.company) AS "company",
+        COALESCE(c.slug, j.company_slug) AS "companySlug",
+        COALESCE(c.logo_url, j.company_logo_url) AS "companyLogoUrl",
+        c.website_url AS "companyWebsiteUrl",
         j.description, j.excerpt, j.apply_url AS "applyUrl", j.apply_type AS "applyType",
         j.apply_email AS "applyEmail", j.employment_type AS "employmentType",
         j.work_arrangement AS "workArrangement", j.experience_level AS "experienceLevel",
@@ -287,6 +290,7 @@ export class JobRepository {
         l.name AS "locationName", l.path AS "locationPath", l.code AS "countryCode"
       FROM jobs j
       LEFT JOIN locations l ON j.primary_location_id = l.id
+      LEFT JOIN companies c ON j.company_id = c.id
       ${whereClause}
       ORDER BY j.posted_at DESC NULLS LAST, j.created_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++};
@@ -306,18 +310,23 @@ export class JobRepository {
   async findById(id: string): Promise<Job | null> {
     const res = await queryPostgres<Job>(
       `SELECT
-        id, job_key AS "jobKey", company_id AS "companyId", external_id AS "externalId", source, title, company,
-        company_slug AS "companySlug", company_logo_url AS "companyLogoUrl",
-        description, excerpt, apply_url AS "applyUrl", apply_type AS "applyType",
-        apply_email AS "applyEmail", employment_type AS "employmentType",
-        work_arrangement AS "workArrangement", experience_level AS "experienceLevel",
-        categories, skills, salary_min AS "salaryMin", salary_max AS "salaryMax",
-        salary_currency AS "salaryCurrency", salary_period AS "salaryPeriod",
-        primary_location_id AS "primaryLocationId", raw_location AS "rawLocation",
-        is_worldwide AS "isWorldwide", status, posted_at AS "postedAt",
-        last_seen_at AS "lastSeenAt", expires_at AS "expiresAt",
-        created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM jobs WHERE id = $1`,
+        j.id, j.job_key AS "jobKey", j.company_id AS "companyId", j.external_id AS "externalId", j.source, j.title,
+        COALESCE(c.name, j.company) AS "company",
+        COALESCE(c.slug, j.company_slug) AS "companySlug",
+        COALESCE(c.logo_url, j.company_logo_url) AS "companyLogoUrl",
+        c.website_url AS "companyWebsiteUrl",
+        j.description, j.excerpt, j.apply_url AS "applyUrl", j.apply_type AS "applyType",
+        j.apply_email AS "applyEmail", j.employment_type AS "employmentType",
+        j.work_arrangement AS "workArrangement", j.experience_level AS "experienceLevel",
+        j.categories, j.skills, j.salary_min AS "salaryMin", j.salary_max AS "salaryMax",
+        j.salary_currency AS "salaryCurrency", j.salary_period AS "salaryPeriod",
+        j.primary_location_id AS "primaryLocationId", j.raw_location AS "rawLocation",
+        j.is_worldwide AS "isWorldwide", j.status, j.posted_at AS "postedAt",
+        j.last_seen_at AS "lastSeenAt", j.expires_at AS "expiresAt",
+        j.created_at AS "createdAt", j.updated_at AS "updatedAt"
+      FROM jobs j
+      LEFT JOIN companies c ON j.company_id = c.id
+      WHERE j.id = $1`,
       [id]
     );
     return res.rows[0] || null;
@@ -326,18 +335,23 @@ export class JobRepository {
   async findByJobKey(jobKey: string): Promise<Job | null> {
     const res = await queryPostgres<Job>(
       `SELECT
-        id, job_key AS "jobKey", company_id AS "companyId", external_id AS "externalId", source, title, company,
-        company_slug AS "companySlug", company_logo_url AS "companyLogoUrl",
-        description, excerpt, apply_url AS "applyUrl", apply_type AS "applyType",
-        apply_email AS "applyEmail", employment_type AS "employmentType",
-        work_arrangement AS "workArrangement", experience_level AS "experienceLevel",
-        categories, skills, salary_min AS "salaryMin", salary_max AS "salaryMax",
-        salary_currency AS "salaryCurrency", salary_period AS "salaryPeriod",
-        primary_location_id AS "primaryLocationId", raw_location AS "rawLocation",
-        is_worldwide AS "isWorldwide", status, posted_at AS "postedAt",
-        last_seen_at AS "lastSeenAt", expires_at AS "expiresAt",
-        created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM jobs WHERE job_key = $1`,
+        j.id, j.job_key AS "jobKey", j.company_id AS "companyId", j.external_id AS "externalId", j.source, j.title,
+        COALESCE(c.name, j.company) AS "company",
+        COALESCE(c.slug, j.company_slug) AS "companySlug",
+        COALESCE(c.logo_url, j.company_logo_url) AS "companyLogoUrl",
+        c.website_url AS "companyWebsiteUrl",
+        j.description, j.excerpt, j.apply_url AS "applyUrl", j.apply_type AS "applyType",
+        j.apply_email AS "applyEmail", j.employment_type AS "employmentType",
+        j.work_arrangement AS "workArrangement", j.experience_level AS "experienceLevel",
+        j.categories, j.skills, j.salary_min AS "salaryMin", j.salary_max AS "salaryMax",
+        j.salary_currency AS "salaryCurrency", j.salary_period AS "salaryPeriod",
+        j.primary_location_id AS "primaryLocationId", j.raw_location AS "rawLocation",
+        j.is_worldwide AS "isWorldwide", j.status, j.posted_at AS "postedAt",
+        j.last_seen_at AS "lastSeenAt", j.expires_at AS "expiresAt",
+        j.created_at AS "createdAt", j.updated_at AS "updatedAt"
+      FROM jobs j
+      LEFT JOIN companies c ON j.company_id = c.id
+      WHERE j.job_key = $1`,
       [jobKey]
     );
     return res.rows[0] || null;

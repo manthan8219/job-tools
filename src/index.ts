@@ -30,6 +30,23 @@ async function main() {
   const { jobProfileService } = await import("./user-job-profile/services/jobProfileService.js");
   await jobProfileService.init();
 
+  // Initialize locations hierarchy tree
+  const { LocationRepository } = await import("./jobs/repositories/locationRepository.js");
+  const locationRepo = new LocationRepository();
+  await locationRepo.init();
+  await locationRepo.seedLocations();
+
+  // Initialize companies directory & seed default target companies
+  const { CompanyRepository } = await import("./jobs/repositories/companyRepository.js");
+  const companyRepo = new CompanyRepository();
+  await companyRepo.init();
+  await companyRepo.seedDefaultCompanies();
+
+  // Initialize global jobs and job_locations tables
+  const { JobRepository } = await import("./jobs/repositories/jobRepository.js");
+  const jobRepo = new JobRepository();
+  await jobRepo.init();
+
   const app = express();
 
   // CORS headers so web/desktop IDE clients can communicate without transport rejection

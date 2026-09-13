@@ -22,7 +22,10 @@ describe("Job MCP Tools", () => {
     source: "ashby",
     title: "Software Engineer, Frontend",
     company: "Ramp",
+    companyId: "c1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
     companySlug: "ramp",
+    companyLogoUrl: "https://ramp.com/logo.png",
+    companyWebsiteUrl: "https://ramp.com",
     description: "<p>Build Next.js apps</p>",
     excerpt: "Frontend engineering role",
     applyUrl: "https://jobs.ashbyhq.com/ramp/123",
@@ -82,6 +85,10 @@ describe("Job MCP Tools", () => {
     expect(result.jobs).toHaveLength(1);
     expect(result.jobs[0].title).toBe("Software Engineer, Frontend");
     expect(result.jobs[0].company).toBe("Ramp");
+    expect(result.jobs[0].companyId).toBe("c1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d");
+    expect(result.jobs[0].companySlug).toBe("ramp");
+    expect(result.jobs[0].companyLogoUrl).toBe("https://ramp.com/logo.png");
+    expect(result.jobs[0].companyWebsiteUrl).toBe("https://ramp.com");
     expect(result.jobs[0].skills).toContain("React");
   });
 

@@ -18,6 +18,8 @@ export const searchJobsDatabaseTool = createTool({
     "Searches the global PostgreSQL jobs database. Supports hierarchical filtering by country (e.g. 'DE', 'CA', 'US'), city slug (e.g. 'munich', 'toronto', 'san-francisco'), work arrangement (remote, hybrid), skills, and keywords.",
   inputSchema: z.object({
     query: z.string().optional().describe("Job title or keywords (e.g. 'Backend Engineer', 'React')"),
+    companySlug: z.string().optional().describe("Filter by company slug (e.g. 'gitlab', 'stripe', 'ramp')"),
+    companyId: z.string().uuid().optional().describe("Filter by company UUID"),
     countryCode: z.string().optional().describe("Country ISO alpha-2 code (e.g. 'DE', 'CA', 'US', 'GB', 'IN')"),
     citySlug: z.string().optional().describe("City slug (e.g. 'munich', 'berlin', 'toronto', 'vancouver', 'san-francisco')"),
     workArrangement: WorkArrangementEnum.optional().describe("Work arrangement: remote, hybrid, on-site"),
@@ -37,6 +39,10 @@ export const searchJobsDatabaseTool = createTool({
     jobs: z.array(
       z.object({
         id: z.string(),
+        companyId: z.string().nullable().optional(),
+        companySlug: z.string().nullable().optional(),
+        companyLogoUrl: z.string().nullable().optional(),
+        companyWebsiteUrl: z.string().nullable().optional(),
         title: z.string(),
         company: z.string(),
         location: z.string().nullable().optional(),
@@ -64,6 +70,10 @@ export const searchJobsDatabaseTool = createTool({
         offset: result.offset,
         jobs: result.jobs.map((j) => ({
           id: j.id,
+          companyId: j.companyId,
+          companySlug: j.companySlug,
+          companyLogoUrl: j.companyLogoUrl,
+          companyWebsiteUrl: (j as any).companyWebsiteUrl,
           title: j.title,
           company: j.company,
           location: j.locationName || j.rawLocation,
@@ -108,6 +118,10 @@ export const getJobDetailsTool = createTool({
       .object({
         id: z.string(),
         jobKey: z.string(),
+        companyId: z.string().nullable().optional(),
+        companySlug: z.string().nullable().optional(),
+        companyLogoUrl: z.string().nullable().optional(),
+        companyWebsiteUrl: z.string().nullable().optional(),
         title: z.string(),
         company: z.string(),
         description: z.string().nullable().optional(),
