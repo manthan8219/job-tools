@@ -125,6 +125,48 @@ export class ResumeRepository {
   }
 
   /**
+   * Performs text- and keyword-based search across candidate's resumes
+   */
+  async findResumesByQuery(userId: string, query: string, limit: number = 5): Promise<(Resume & { score: number })[]> {
+    const db = await getMongoDb();
+    const collection = db.collection<Resume>(COLLECTION_NAME);
+
+    const tokens = query
+      .split(/[\s,;|/]+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 1);
+
+    const regexQuery = tokens.length > 0 ? tokens.join("|") : query.trim();
+
+    try {
+      const filter: any = {
+        userId,
+        $or: [
+          { title: { $regex: regexQuery, $options: "i" } },
+          { targetRole: { $regex: regexQuery, $options: "i" } },
+          { summary: { $regex: regexQuery, $options: "i" } },
+          { markdownContent: { $regex: regexQuery, $options: "i" } },
+          { skills: { $in: tokens.map((t) => new RegExp(t, "i")) } },
+        ],
+      };
+
+      const results = await collection
+        .find(filter, { projection: { _id: 0 } })
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      return results.map((r, index) => ({
+        ...r,
+        score: Math.max(0.7, 0.95 - index * 0.05),
+      }));
+    } catch (error) {
+      logger.error(`Error searching resumes by query in MongoDB`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Automatically creates the Vector Search Index in MongoDB Atlas if it doesn't exist.
    * Note: This requires the MongoDB Node Driver v6+ and connecting to an Atlas Cluster.
    */

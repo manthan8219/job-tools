@@ -22,12 +22,19 @@ export const ResumeSchema = z.object({
   jobId: z.string().uuid().optional().describe("Unique identifier of the target job this tailored resume was crafted for"),
   
   title: z.string().describe("e.g., 'Senior Frontend Engineer Resume'"),
+  targetRole: z.string().optional().describe("Target job title or role"),
+  summary: z.string().optional().describe("Professional executive summary statement"),
+  markdownContent: z.string().optional().describe("Complete ATS-optimized markdown content of the resume"),
   
   // The raw JSON data
-  skills: z.array(z.string()),
-  experience: z.array(ExperienceSchema),
-  education: z.array(EducationSchema),
+  skills: z.array(z.string()).default([]),
+  experience: z.array(ExperienceSchema).default([]),
+  education: z.array(EducationSchema).default([]),
   
+  // HR evaluation records
+  hrScore: z.number().optional().describe("Passing HR screener score (0-100)"),
+  hrFeedback: z.record(z.any()).optional().describe("HR review evaluation breakdown, strengths, and critique"),
+
   // The embedding vector for AI semantic matching
   embedding: z.array(z.number()).optional().describe("Vector representation of the resume for semantic search"),
   

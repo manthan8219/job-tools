@@ -120,7 +120,27 @@ describe("Resume MCP Tools", () => {
 
       const result = await searchSimilarResumesTool.execute(input);
 
-      expect(resumeService.searchSimilarResumes).toHaveBeenCalledWith("user-1234-5678", input.jobEmbedding);
+      expect(resumeService.searchSimilarResumes).toHaveBeenCalledWith(
+        "user-1234-5678",
+        expect.objectContaining({ queryVector: input.jobEmbedding })
+      );
+      expect(result.success).toBe(true);
+      expect((result as any).matches).toHaveLength(1);
+    });
+
+    it("should execute text query search and return matches", async () => {
+      vi.mocked(resumeService.searchSimilarResumes).mockResolvedValueOnce([{ ...mockResume, score: 0.95 }]);
+
+      const input = {
+        query: "Senior Backend Engineer",
+      };
+
+      const result = await searchSimilarResumesTool.execute(input);
+
+      expect(resumeService.searchSimilarResumes).toHaveBeenCalledWith(
+        "user-1234-5678",
+        expect.objectContaining({ query: "Senior Backend Engineer" })
+      );
       expect(result.success).toBe(true);
       expect((result as any).matches).toHaveLength(1);
     });

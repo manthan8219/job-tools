@@ -107,19 +107,25 @@ export const getLatestResumeTool = createTool({
 });
 
 const SearchResumeInput = z.object({
-  jobEmbedding: z.array(z.number()).describe("The vector embedding of the job description requirements"),
+  query: z.string().optional().describe("Job title, description excerpt, or skills to match against candidate resumes"),
+  jobEmbedding: z.array(z.number()).optional().describe("Optional vector embedding of the job description requirements"),
+  limit: z.number().int().positive().max(20).default(5).describe("Max matching resumes to return (default 5)"),
   authUserId: z.string().optional(),
 });
 
 export const searchSimilarResumesTool = createTool({
   id: "search-similar-resumes",
-  description: "Mathematically searches the user's resumes against a job description embedding using MongoDB Atlas Vector Search.",
+  description: "Searches existing candidate resumes against a job description or keywords using Atlas Vector Search or intelligent keyword matching.",
   inputSchema: SearchResumeInput,
   execute: withAuth(async (input: z.infer<typeof SearchResumeInput>) => {
     try {
       const userId = input.authUserId as string; // Guaranteed by middleware
       
-      const matches = await resumeService.searchSimilarResumes(userId, input.jobEmbedding);
+      const matches = await resumeService.searchSimilarResumes(userId, {
+        queryVector: input.jobEmbedding,
+        query: input.query,
+        limit: input.limit,
+      });
       return {
         success: true,
         message: `Found ${matches.length} matching resumes.`,

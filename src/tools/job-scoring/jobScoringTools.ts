@@ -11,6 +11,7 @@ import {
   ActionableRecommendationSchema,
   JobUserScoreSchema,
 } from "../../job-scoring/models/jobScoring.js";
+import { withAuth } from "../../auth/middleware.js";
 
 const scoringService = new JobScoringService();
 
@@ -22,7 +23,8 @@ export const saveJobScoreTool = createTool({
   description:
     "Saves or updates a candidate-job match analysis including overall score, fit verdict, score breakdown, strong points, weaknesses, gap analysis, keyword matrix, and actionable recommendations.",
   inputSchema: z.object({
-    userId: z.string().uuid().describe("UUID of the user"),
+    userId: z.string().uuid().optional().describe("UUID of the user. If omitted, defaults to authenticated user"),
+    authUserId: z.string().optional(),
     jobId: z.string().uuid().describe("UUID of the job"),
     resumeId: z.string().optional().describe("Optional resume ID or version evaluated"),
     overall_score: z.number().min(0).max(100).describe("Overall match score percentage (0-100)"),
@@ -40,13 +42,17 @@ export const saveJobScoreTool = createTool({
     message: z.string().optional(),
     error: z.string().optional(),
   }),
-  execute: async (input: any) => {
+  execute: withAuth(async (input: any) => {
     try {
-      const saved = await scoringService.saveScore(input);
+      const effectiveUserId = input.userId || input.authUserId;
+      if (!effectiveUserId) {
+        return { success: false, error: "Missing required userId" };
+      }
+      const saved = await scoringService.saveScore({ ...input, userId: effectiveUserId });
       return {
         success: true,
         score: saved,
-        message: `Successfully saved score for user ${input.userId} on job ${input.jobId} (${input.overall_score}%)`,
+        message: `Successfully saved score for user ${effectiveUserId} on job ${input.jobId} (${input.overall_score}%)`,
       };
     } catch (error: any) {
       return {
@@ -54,7 +60,7 @@ export const saveJobScoreTool = createTool({
         error: error.message,
       };
     }
-  },
+  }),
 });
 
 /**
@@ -65,22 +71,28 @@ export const getJobScoreTool = createTool({
   description:
     "Retrieves candidate match score, fit verdict, category score breakdown, gap analysis, keyword matrix, and recommendations for a specific user and job.",
   inputSchema: z.object({
-    userId: z.string().uuid().describe("UUID of the user"),
+    userId: z.string().uuid().optional().describe("UUID of the user. If omitted, defaults to authenticated user"),
+    authUserId: z.string().optional(),
     jobId: z.string().uuid().describe("UUID of the job"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
     score: JobUserScoreSchema.nullable().optional(),
     error: z.string().optional(),
+    message: z.string().optional(),
   }),
-  execute: async (input: any) => {
+  execute: withAuth(async (input: any) => {
     try {
-      const score = await scoringService.getScore(input.userId, input.jobId);
+      const effectiveUserId = input.userId || input.authUserId;
+      if (!effectiveUserId) {
+        return { success: false, score: null, error: "Missing required userId" };
+      }
+      const score = await scoringService.getScore(effectiveUserId, input.jobId);
       if (!score) {
         return {
           success: false,
           score: null,
-          error: `Score not found for user ${input.userId} and job ${input.jobId}`,
+          error: `Score not found for user ${effectiveUserId} and job ${input.jobId}`,
         };
       }
       return {
@@ -94,7 +106,7 @@ export const getJobScoreTool = createTool({
         error: error.message,
       };
     }
-  },
+  }),
 });
 
 /**
@@ -105,7 +117,8 @@ export const getUserTopScoredJobsTool = createTool({
   description:
     "Lists a user's best matching jobs sorted by match score with fit verdicts, key summaries, and linked company and job details.",
   inputSchema: z.object({
-    userId: z.string().uuid().describe("UUID of the user"),
+    userId: z.string().uuid().optional().describe("UUID of the user. If omitted, defaults to authenticated user"),
+    authUserId: z.string().optional(),
     minScore: z.number().min(0).max(100).optional().describe("Minimum overall score filter (e.g. 75)"),
     fitVerdict: FitVerdictEnum.optional().describe("Filter by fit verdict (e.g. 'Strong Fit')"),
     limit: z.number().int().positive().max(50).default(20).describe("Max results (default 20)"),
@@ -113,8 +126,8 @@ export const getUserTopScoredJobsTool = createTool({
   }),
   outputSchema: z.object({
     success: z.boolean(),
-    totalFound: z.number(),
-    returned: z.number(),
+    totalFound: z.number().optional(),
+    returned: z.number().optional(),
     scores: z.array(
       z.object({
         id: z.string(),
@@ -139,12 +152,17 @@ export const getUserTopScoredJobsTool = createTool({
         createdAt: z.date().optional(),
         updatedAt: z.date().optional(),
       })
-    ),
+    ).optional(),
     error: z.string().optional(),
+    message: z.string().optional(),
   }),
-  execute: async (input: any) => {
+  execute: withAuth(async (input: any) => {
     try {
-      const result = await scoringService.getUserTopScoredJobs(input);
+      const effectiveUserId = input.userId || input.authUserId;
+      if (!effectiveUserId) {
+        return { success: false, totalFound: 0, returned: 0, scores: [], error: "Missing required userId" };
+      }
+      const result = await scoringService.getUserTopScoredJobs({ ...input, userId: effectiveUserId });
       return {
         success: true,
         totalFound: result.totalFound,
@@ -160,5 +178,5 @@ export const getUserTopScoredJobsTool = createTool({
         error: error.message,
       };
     }
-  },
+  }),
 });
