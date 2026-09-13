@@ -48,6 +48,20 @@ export class ResumeService {
     return resume;
   }
 
+  async updateResumePdfUrl(id: string, userId: string, pdfUrl: string, fileKey?: string): Promise<Resume> {
+    // Verify resume exists and belongs to user
+    await this.getResume(id, userId);
+
+    const updated = await this.repository.updatePdfUrl(id, pdfUrl, fileKey);
+    if (!updated) {
+      throw new NotFoundError(`Resume with ID ${id}`);
+    }
+
+    // Refresh Redis cache
+    await this.cache.cacheResume(updated);
+    return updated;
+  }
+
   async getUserResumes(userId: string): Promise<Resume[]> {
     // 1. Check Redis cache first
     const cachedList = await this.cache.getCachedUserResumes(userId);

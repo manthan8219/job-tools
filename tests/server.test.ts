@@ -43,6 +43,10 @@ describe("MCP Server Base Setup", () => {
     expect(toolList.tools.some((t: any) => t.name === "getUserWorkList")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "getFeaturedUserWork")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "checkRepositoryScraped")).toBe(true);
+    expect(toolList.tools.some((t: any) => t.name === "uploadResumeFile")).toBe(true);
+    expect(toolList.tools.some((t: any) => t.name === "generateResumeUploadUrl")).toBe(true);
+    expect(toolList.tools.some((t: any) => t.name === "getResumeDownloadUrl")).toBe(true);
+    expect(toolList.tools.some((t: any) => t.name === "deleteResumeFile")).toBe(true);
   });
 
   it("should support registering and executing a Mastra tool", async () => {

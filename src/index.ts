@@ -10,6 +10,10 @@ import express from "express";
 import session from "express-session";
 import passport from "./passport-auth/passport.js";
 import jwt from "jsonwebtoken";
+import fs from "node:fs";
+import path from "node:path";
+import { config } from "./config.js";
+import { localUploadTokens } from "./storage/providers/localStorageProvider.js";
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
@@ -144,6 +148,50 @@ async function main() {
 
   app.get('/auth/login-failed', (req, res) => {
     res.status(401).send("Authentication with Zitadel failed.");
+  });
+
+  // Local storage static file serving
+  const uploadsDir = path.resolve(config.storage.localDir);
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsDir));
+
+  // Local storage direct PUT upload endpoint for presigned upload URLs
+  app.put('/api/storage/upload', express.raw({ type: '*/*', limit: '50mb' }), (req, res) => {
+    const key = req.query.key as string;
+    const token = req.query.token as string;
+
+    if (!key || !token) {
+      return res.status(400).json({ error: "Missing required query parameters: 'key' and 'token'" });
+    }
+
+    const tokenData = localUploadTokens.get(token);
+    if (!tokenData || tokenData.fileKey !== key) {
+      return res.status(403).json({ error: "Invalid or expired upload token" });
+    }
+
+    if (Date.now() > tokenData.expiresAt) {
+      localUploadTokens.delete(token);
+      return res.status(403).json({ error: "Upload token has expired" });
+    }
+
+    try {
+      const destinationPath = path.join(uploadsDir, key);
+      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+      fs.writeFileSync(destinationPath, req.body);
+      localUploadTokens.delete(token);
+
+      logger.info(`[StorageAPI] Stored uploaded file at: ${destinationPath}`);
+      return res.status(200).json({
+        success: true,
+        fileKey: key,
+        message: "File uploaded successfully",
+      });
+    } catch (err: any) {
+      logger.error("Error saving uploaded file locally:", err);
+      return res.status(500).json({ error: "Failed to save uploaded file", details: err.message });
+    }
   });
 
   // Provide a visible endpoint for browsers

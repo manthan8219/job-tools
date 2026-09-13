@@ -30,6 +30,10 @@ export const ResumeSchema = z.object({
   // The embedding vector for AI semantic matching
   embedding: z.array(z.number()).optional().describe("Vector representation of the resume for semantic search"),
   
+  // Rendered PDF / storage link
+  pdfUrl: z.string().optional().describe("Public or presigned URL to view/download the rendered resume PDF"),
+  fileKey: z.string().optional().describe("Storage key in the blob/local storage for file retrieval"),
+
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
 });

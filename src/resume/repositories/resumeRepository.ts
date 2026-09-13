@@ -41,6 +41,27 @@ export class ResumeRepository {
     return await collection.find({ userId }, { projection: { _id: 0 } }).toArray();
   }
 
+  async updatePdfUrl(id: string, pdfUrl: string, fileKey?: string): Promise<Resume | null> {
+    const db = await getMongoDb();
+    const collection = db.collection<Resume>(COLLECTION_NAME);
+
+    const updateFields: any = {
+      pdfUrl,
+      updatedAt: new Date(),
+    };
+    if (fileKey) {
+      updateFields.fileKey = fileKey;
+    }
+
+    const result = await collection.findOneAndUpdate(
+      { id },
+      { $set: updateFields },
+      { returnDocument: "after", projection: { _id: 0 } }
+    );
+
+    return (result as unknown as Resume) || null;
+  }
+
   /**
    * Performs a Semantic Search using MongoDB Atlas Vector Search
    */

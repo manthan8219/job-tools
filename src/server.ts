@@ -35,6 +35,12 @@ import {
   getFeaturedUserWorkTool,
   checkRepositoryScrapedTool,
 } from "./tools/user-work/userWorkTools.js";
+import {
+  uploadResumeFileTool,
+  generateResumeUploadUrlTool,
+  getResumeDownloadUrlTool,
+  deleteResumeFileTool,
+} from "./tools/storage/storageTools.js";
 
 export const server = new MCPServer({
   name: "job-applier-mcp",
@@ -72,6 +78,10 @@ export const server = new MCPServer({
     getUserWorkList: getUserWorkListTool,
     getFeaturedUserWork: getFeaturedUserWorkTool,
     checkRepositoryScraped: checkRepositoryScrapedTool,
+    uploadResumeFile: uploadResumeFileTool,
+    generateResumeUploadUrl: generateResumeUploadUrlTool,
+    getResumeDownloadUrl: getResumeDownloadUrlTool,
+    deleteResumeFile: deleteResumeFileTool,
   },
 });
 
