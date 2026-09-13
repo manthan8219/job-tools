@@ -55,12 +55,24 @@ export class JobRepository {
         );
 
         CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs (primary_location_id);
-        CREATE INDEX IF NOT EXISTS idx_jobs_company_id ON jobs (company_id);
         CREATE INDEX IF NOT EXISTS idx_jobs_status_arrangement ON jobs (status, work_arrangement);
         CREATE INDEX IF NOT EXISTS idx_jobs_posted_at ON jobs (posted_at DESC);
         CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs (company);
         CREATE INDEX IF NOT EXISTS idx_jobs_skills ON jobs USING GIN (skills);
         CREATE INDEX IF NOT EXISTS idx_jobs_categories ON jobs USING GIN (categories);
+
+        -- Ensure company_id exists if jobs table pre-dated companies migration
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'jobs' AND column_name = 'company_id'
+          ) THEN
+            ALTER TABLE jobs ADD COLUMN company_id UUID REFERENCES companies(id) ON DELETE SET NULL;
+          END IF;
+        END $$;
+
+        CREATE INDEX IF NOT EXISTS idx_jobs_company_id ON jobs (company_id);
       `);
       logger.info("[JobRepository] Initialized jobs and job_locations tables in PostgreSQL");
     } catch (error) {

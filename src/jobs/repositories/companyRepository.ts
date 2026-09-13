@@ -40,15 +40,18 @@ export class CompanyRepository {
         CREATE INDEX IF NOT EXISTS idx_companies_industry ON companies (industry);
         CREATE INDEX IF NOT EXISTS idx_companies_linkedin_id ON companies (linkedin_id);
 
-        -- Add company_id reference to jobs and LinkedIn columns to companies if not present
+        -- Add company_id reference to jobs if table exists, and LinkedIn columns to companies if not present
         DO $$
         BEGIN
-          IF NOT EXISTS (
+          IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_name = 'jobs'
+          ) AND NOT EXISTS (
             SELECT 1 FROM information_schema.columns
             WHERE table_name = 'jobs' AND column_name = 'company_id'
           ) THEN
             ALTER TABLE jobs ADD COLUMN company_id UUID REFERENCES companies(id) ON DELETE SET NULL;
-            CREATE INDEX idx_jobs_company_id ON jobs (company_id);
+            CREATE INDEX IF NOT EXISTS idx_jobs_company_id ON jobs (company_id);
           END IF;
 
           IF NOT EXISTS (
