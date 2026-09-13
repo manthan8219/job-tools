@@ -28,6 +28,12 @@ import {
   getJobScoreTool,
   getUserTopScoredJobsTool,
 } from "./tools/job-scoring/jobScoringTools.js";
+import {
+  saveUserWorkTool,
+  getUserWorkTool,
+  getUserWorkListTool,
+  getFeaturedUserWorkTool,
+} from "./tools/user-work/userWorkTools.js";
 
 export const server = new MCPServer({
   name: "job-applier-mcp",
@@ -60,6 +66,10 @@ export const server = new MCPServer({
     saveJobScore: saveJobScoreTool,
     getJobScore: getJobScoreTool,
     getUserTopScoredJobs: getUserTopScoredJobsTool,
+    saveUserWork: saveUserWorkTool,
+    getUserWork: getUserWorkTool,
+    getUserWorkList: getUserWorkListTool,
+    getFeaturedUserWork: getFeaturedUserWorkTool,
   },
 });
 
