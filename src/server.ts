@@ -7,6 +7,12 @@ import { checkOnboardingTool, markOnboardingCompletedTool } from "./tools/onboar
 import { passportLoginTool, passportLogoutTool } from "./tools/passport-auth/passportAuthTools.js";
 import { getUserStatsTool } from "./tools/user-profile/userProfileTools.js";
 import { getJobProfileTool, upsertJobProfileTool } from "./tools/user-job-profile/jobProfileTools.js";
+import { scrapeJobsTool } from "./tools/scrapers/scraperTools.js";
+import { getScraperConfigTool } from "./tools/scrapers/scraperConfigTools.js";
+import {
+  searchJobsDatabaseTool,
+  getJobDetailsTool,
+} from "./tools/jobs/jobTools.js";
 
 export const server = new MCPServer({
   name: "job-applier-mcp",
@@ -27,5 +33,12 @@ export const server = new MCPServer({
     getUserApplicationStats: getUserStatsTool,
     getJobProfile: getJobProfileTool,
     upsertJobProfile: upsertJobProfileTool,
+    scrapeJobs: scrapeJobsTool,
+    getScraperConfig: getScraperConfigTool,
+    searchJobsDatabase: searchJobsDatabaseTool,
+    getJobDetails: getJobDetailsTool,
   },
 });
+
+
+
