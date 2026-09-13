@@ -7,6 +7,7 @@ import {
   getUserResumesTool,
   getLatestResumeTool,
   searchSimilarResumesTool,
+  getResumeForJobTool,
 } from "./tools/resume/resumeTools.js";
 import { convertMdToPdfTool, convertLatexToPdfTool } from "./tools/utilities/converterTools.js";
 import { checkOnboardingTool, markOnboardingCompletedTool } from "./tools/onboarding/onboardingTools.js";
@@ -55,6 +56,7 @@ export const server = new MCPServer({
     getUserResumes: getUserResumesTool,
     getLatestResume: getLatestResumeTool,
     searchSimilarResumes: searchSimilarResumesTool,
+    getResumeForJob: getResumeForJobTool,
     convertMdToPdf: convertMdToPdfTool,
     convertLatexToPdf: convertLatexToPdfTool,
     checkOnboardingCompleted: checkOnboardingTool,

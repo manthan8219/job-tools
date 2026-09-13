@@ -53,16 +53,27 @@ export class S3StorageProvider implements StorageProvider {
     return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
   }
 
-  private buildFileKey(userId: string, resumeId: string | undefined, fileName: string): string {
+  private buildFileKey(
+    userId: string,
+    resumeId: string | undefined,
+    jobId: string | undefined,
+    fileName: string
+  ): string {
     const safeName = this.sanitizeFileName(fileName);
     const timestamp = Date.now();
+    const jobPart = jobId ? `jobs/${jobId}/` : "";
     const resumePart = resumeId ? `${resumeId}/` : "";
-    return `users/${userId}/resumes/${resumePart}${timestamp}-${safeName}`;
+    return `users/${userId}/${jobPart}resumes/${resumePart}${timestamp}-${safeName}`;
   }
 
   async uploadFile(options: UploadFileOptions): Promise<UploadResult> {
     try {
-      const fileKey = this.buildFileKey(options.userId, options.resumeId, options.fileName);
+      const fileKey = this.buildFileKey(
+        options.userId,
+        options.resumeId,
+        options.jobId,
+        options.fileName
+      );
       let body: Buffer;
 
       if (options.filePath) {
@@ -73,6 +84,7 @@ export class S3StorageProvider implements StorageProvider {
             fileKey: "",
             downloadUrl: "",
             storageProvider: "s3-compatible",
+            jobId: options.jobId,
             error: `Input file not found at ${resolvedInput}`,
           };
         }
@@ -85,6 +97,7 @@ export class S3StorageProvider implements StorageProvider {
           fileKey: "",
           downloadUrl: "",
           storageProvider: "s3-compatible",
+          jobId: options.jobId,
           error: "Neither filePath nor buffer was provided for upload.",
         };
       }
@@ -124,6 +137,7 @@ export class S3StorageProvider implements StorageProvider {
         storageProvider: "s3-compatible",
         fileSize: body.length,
         contentType,
+        jobId: options.jobId,
       };
     } catch (error: any) {
       logger.error("[S3StorageProvider] Upload failed", error);
@@ -132,6 +146,7 @@ export class S3StorageProvider implements StorageProvider {
         fileKey: "",
         downloadUrl: "",
         storageProvider: "s3-compatible",
+        jobId: options.jobId,
         error: error.message || "S3 upload failed",
       };
     }
@@ -139,7 +154,12 @@ export class S3StorageProvider implements StorageProvider {
 
   async generateUploadUrl(options: GenerateUploadUrlOptions): Promise<PresignedUploadResult> {
     try {
-      const fileKey = this.buildFileKey(options.userId, options.resumeId, options.fileName);
+      const fileKey = this.buildFileKey(
+        options.userId,
+        options.resumeId,
+        options.jobId,
+        options.fileName
+      );
       const expiresInSeconds = options.expiresInSeconds || 900;
       const contentType = options.contentType || "application/pdf";
 
@@ -163,6 +183,7 @@ export class S3StorageProvider implements StorageProvider {
         },
         expiresInSeconds,
         storageProvider: "s3-compatible",
+        jobId: options.jobId,
       };
     } catch (error: any) {
       logger.error("[S3StorageProvider] Failed to generate presigned upload URL", error);
@@ -173,6 +194,7 @@ export class S3StorageProvider implements StorageProvider {
         method: "PUT",
         expiresInSeconds: 0,
         storageProvider: "s3-compatible",
+        jobId: options.jobId,
         error: error.message || "Failed to generate presigned upload URL",
       };
     }

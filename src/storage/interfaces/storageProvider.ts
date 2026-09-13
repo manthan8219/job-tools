@@ -4,6 +4,7 @@ export interface UploadFileOptions {
   fileName: string;
   userId: string;
   resumeId?: string;
+  jobId?: string;
   contentType?: string;
 }
 
@@ -14,12 +15,14 @@ export interface UploadResult {
   storageProvider: "local" | "s3-compatible";
   fileSize?: number;
   contentType?: string;
+  jobId?: string;
   error?: string;
 }
 
 export interface GenerateUploadUrlOptions {
   userId: string;
   resumeId?: string;
+  jobId?: string;
   fileName: string;
   contentType?: string;
   expiresInSeconds?: number;
@@ -33,6 +36,7 @@ export interface PresignedUploadResult {
   headers?: Record<string, string>;
   expiresInSeconds: number;
   storageProvider: "local" | "s3-compatible";
+  jobId?: string;
   error?: string;
 }
 

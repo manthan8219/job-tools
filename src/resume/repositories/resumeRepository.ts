@@ -41,7 +41,23 @@ export class ResumeRepository {
     return await collection.find({ userId }, { projection: { _id: 0 } }).toArray();
   }
 
-  async updatePdfUrl(id: string, pdfUrl: string, fileKey?: string): Promise<Resume | null> {
+  async findByJobId(userId: string, jobId: string): Promise<Resume | null> {
+    const db = await getMongoDb();
+    const collection = db.collection<Resume>(COLLECTION_NAME);
+
+    // Return the latest resume linked to this job for this user
+    return await collection.findOne(
+      { userId, jobId },
+      { sort: { updatedAt: -1, createdAt: -1 }, projection: { _id: 0 } }
+    );
+  }
+
+  async updatePdfUrl(
+    id: string,
+    pdfUrl: string,
+    fileKey?: string,
+    jobId?: string
+  ): Promise<Resume | null> {
     const db = await getMongoDb();
     const collection = db.collection<Resume>(COLLECTION_NAME);
 
@@ -51,6 +67,9 @@ export class ResumeRepository {
     };
     if (fileKey) {
       updateFields.fileKey = fileKey;
+    }
+    if (jobId) {
+      updateFields.jobId = jobId;
     }
 
     const result = await collection.findOneAndUpdate(

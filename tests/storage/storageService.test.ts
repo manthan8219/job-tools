@@ -56,6 +56,7 @@ describe("StorageService", () => {
       fileName: "test.pdf",
       userId: "u1",
       resumeId: "r1",
+      jobId: "j1",
     });
 
     expect(result.success).toBe(true);
@@ -64,7 +65,8 @@ describe("StorageService", () => {
       "r1",
       "u1",
       result.downloadUrl,
-      result.fileKey
+      result.fileKey,
+      "j1"
     );
   });
 

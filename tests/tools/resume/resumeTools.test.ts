@@ -5,6 +5,7 @@ import {
   getUserResumesTool,
   getLatestResumeTool,
   searchSimilarResumesTool,
+  getResumeForJobTool,
 } from "../../../src/tools/resume/resumeTools.js";
 import { resumeService } from "../../../src/resume/services/resumeService.js";
 
@@ -16,6 +17,7 @@ vi.mock("../../../src/resume/services/resumeService.js", () => ({
     getUserResumes: vi.fn(),
     getLatestResume: vi.fn(),
     searchSimilarResumes: vi.fn(),
+    getResumeForJob: vi.fn(),
   },
 }));
 
@@ -121,6 +123,34 @@ describe("Resume MCP Tools", () => {
       expect(resumeService.searchSimilarResumes).toHaveBeenCalledWith("user-1234-5678", input.jobEmbedding);
       expect(result.success).toBe(true);
       expect((result as any).matches).toHaveLength(1);
+    });
+  });
+
+  describe("getResumeForJobTool", () => {
+    it("should retrieve tailored resume for a specific job", async () => {
+      vi.mocked(resumeService.getResumeForJob).mockResolvedValueOnce({
+        ...mockResume,
+        jobId: "job-1111-2222",
+      });
+
+      const result = await getResumeForJobTool.execute({
+        jobId: "job-1111-2222",
+      });
+
+      expect(resumeService.getResumeForJob).toHaveBeenCalledWith("user-1234-5678", "job-1111-2222");
+      expect(result.success).toBe(true);
+      expect((result as any).resume.jobId).toBe("job-1111-2222");
+    });
+
+    it("should handle when no tailored resume exists for that job", async () => {
+      vi.mocked(resumeService.getResumeForJob).mockResolvedValueOnce(null);
+
+      const result = await getResumeForJobTool.execute({
+        jobId: "job-1111-2222",
+      });
+
+      expect(result.success).toBe(false);
+      expect((result as any).message).toContain("No tailored resume found");
     });
   });
 });

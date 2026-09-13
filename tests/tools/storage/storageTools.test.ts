@@ -25,6 +25,7 @@ describe("Storage MCP Tools", () => {
 
       const result = await uploadResumeFileTool.execute({
         userId: "11111111-1111-1111-1111-111111111111",
+        jobId: "22222222-2222-2222-2222-222222222222",
         filePath: "/tmp/resume.pdf",
         fileName: "resume.pdf",
         contentType: "application/pdf",
@@ -34,6 +35,7 @@ describe("Storage MCP Tools", () => {
       expect(result.downloadUrl).toContain("resume.pdf");
       expect(storageService.uploadResumeFile).toHaveBeenCalledWith({
         userId: "11111111-1111-1111-1111-111111111111",
+        jobId: "22222222-2222-2222-2222-222222222222",
         resumeId: undefined,
         filePath: "/tmp/resume.pdf",
         fileName: "resume.pdf",

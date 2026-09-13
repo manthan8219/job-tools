@@ -56,6 +56,23 @@ describe("S3StorageProvider", () => {
     expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
+  it("should structure S3 key with jobId when jobId is provided", async () => {
+    mockSend.mockResolvedValueOnce({});
+    mockGetSignedUrl.mockResolvedValueOnce("https://test-bucket.s3.amazonaws.com/presigned-get");
+
+    const result = await provider.uploadFile({
+      buffer: Buffer.from("pdf-data"),
+      fileName: "resume.pdf",
+      userId: "11111111-1111-1111-1111-111111111111",
+      jobId: "33333333-3333-3333-3333-333333333333",
+      resumeId: "22222222-2222-2222-2222-222222222222",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.jobId).toBe("33333333-3333-3333-3333-333333333333");
+    expect(result.fileKey).toContain("users/11111111-1111-1111-1111-111111111111/jobs/33333333-3333-3333-3333-333333333333/resumes/22222222-2222-2222-2222-222222222222/");
+  });
+
   it("should use publicBaseUrl when provided", async () => {
     const cdnProvider = new S3StorageProvider({
       bucket: "test-bucket",

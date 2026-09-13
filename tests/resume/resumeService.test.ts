@@ -14,7 +14,9 @@ describe("ResumeService", () => {
       create: vi.fn(),
       findById: vi.fn(),
       findByUserId: vi.fn(),
+      findByJobId: vi.fn(),
       findSimilarResumes: vi.fn(),
+      updatePdfUrl: vi.fn(),
     };
 
     cacheMock = {
@@ -24,6 +26,7 @@ describe("ResumeService", () => {
       cacheUserResumes: vi.fn().mockResolvedValue(undefined),
       getCachedLatestResume: vi.fn().mockResolvedValue(null),
       cacheLatestResume: vi.fn().mockResolvedValue(undefined),
+      getCachedResumeByJob: vi.fn().mockResolvedValue(null),
       invalidateResume: vi.fn().mockResolvedValue(undefined),
     };
 
@@ -174,6 +177,61 @@ describe("ResumeService", () => {
 
     it("should throw an error if query vector is empty", async () => {
       await expect(service.searchSimilarResumes(mockResume.userId, [])).rejects.toThrow("Invalid query vector");
+    });
+  });
+
+  describe("updateResumePdfUrl", () => {
+    it("should update pdfUrl, fileKey, and jobId and update cache", async () => {
+      cacheMock.getCachedResume.mockResolvedValueOnce(mockResume);
+      repoMock.updatePdfUrl.mockResolvedValueOnce({
+        ...mockResume,
+        pdfUrl: "http://example.com/test.pdf",
+        fileKey: "users/u1/jobs/j1/test.pdf",
+        jobId: "j1",
+      });
+
+      const updated = await service.updateResumePdfUrl(
+        mockResume.id,
+        mockResume.userId,
+        "http://example.com/test.pdf",
+        "users/u1/jobs/j1/test.pdf",
+        "j1"
+      );
+
+      expect(repoMock.updatePdfUrl).toHaveBeenCalledWith(
+        mockResume.id,
+        "http://example.com/test.pdf",
+        "users/u1/jobs/j1/test.pdf",
+        "j1"
+      );
+      expect(cacheMock.cacheResume).toHaveBeenCalled();
+      expect(updated.jobId).toBe("j1");
+    });
+  });
+
+  describe("getResumeForJob", () => {
+    it("should return cached resume for job if available", async () => {
+      cacheMock.getCachedResumeByJob.mockResolvedValueOnce({
+        ...mockResume,
+        jobId: "job-999",
+      });
+
+      const result = await service.getResumeForJob(mockResume.userId, "job-999");
+      expect(cacheMock.getCachedResumeByJob).toHaveBeenCalledWith(mockResume.userId, "job-999");
+      expect(result?.jobId).toBe("job-999");
+    });
+
+    it("should fetch from repo and cache on cache miss", async () => {
+      cacheMock.getCachedResumeByJob.mockResolvedValueOnce(null);
+      repoMock.findByJobId.mockResolvedValueOnce({
+        ...mockResume,
+        jobId: "job-999",
+      });
+
+      const result = await service.getResumeForJob(mockResume.userId, "job-999");
+      expect(repoMock.findByJobId).toHaveBeenCalledWith(mockResume.userId, "job-999");
+      expect(cacheMock.cacheResume).toHaveBeenCalled();
+      expect(result?.jobId).toBe("job-999");
     });
   });
 });

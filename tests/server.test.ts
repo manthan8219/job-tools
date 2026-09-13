@@ -29,6 +29,7 @@ describe("MCP Server Base Setup", () => {
     expect(toolList.tools.some((t: any) => t.name === "getUserResumes")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "getLatestResume")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "searchSimilarResumes")).toBe(true);
+    expect(toolList.tools.some((t: any) => t.name === "getResumeForJob")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "convertMdToPdf")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "convertLatexToPdf")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "checkOnboardingCompleted")).toBe(true);

@@ -5,12 +5,16 @@ import { storageService } from "../../storage/services/storageService.js";
 export const uploadResumeFileTool = createTool({
   id: "uploadResumeFile",
   description:
-    "Uploads a locally generated resume file (PDF, DOCX, etc.) directly into blob or local storage. Use this tool immediately after compiling a resume with convertMdToPdf or convertLatexToPdf. If resumeId is provided, it automatically attaches the generated download URL and storage key to the resume record in MongoDB and refreshes the Redis cache.",
+    "Uploads a locally generated resume file (PDF, DOCX, etc.) directly into blob or local storage. Use this tool immediately after compiling a tailored resume with convertMdToPdf or convertLatexToPdf. When jobId is provided, links the resume and stored file specifically to that job posting. If resumeId is provided, updates the resume record in MongoDB and Redis.",
   inputSchema: z.object({
     userId: z
       .string()
       .uuid()
       .describe("UUID of the user/candidate who owns this resume. Example: '550e8400-e29b-41d4-a716-446655440000'"),
+    jobId: z
+      .string()
+      .optional()
+      .describe("Optional identifier of the target job posting this tailored resume was created for. Organizes the file under the job hierarchy and links the resume to the job."),
     resumeId: z
       .string()
       .uuid()
@@ -34,9 +38,10 @@ export const uploadResumeFileTool = createTool({
       .default("application/pdf")
       .describe("MIME type of the uploaded file. Defaults to 'application/pdf'"),
   }),
-  execute: async ({ userId, resumeId, filePath, fileName, contentType }) => {
+  execute: async ({ userId, jobId, resumeId, filePath, fileName, contentType }) => {
     return await storageService.uploadResumeFile({
       userId,
+      jobId,
       resumeId,
       filePath,
       fileName,
@@ -48,12 +53,16 @@ export const uploadResumeFileTool = createTool({
 export const generateResumeUploadUrlTool = createTool({
   id: "generateResumeUploadUrl",
   description:
-    "Generates a pre-signed HTTP upload URL (for Cloudflare R2, AWS S3, MinIO, or the local server) allowing direct binary file upload via HTTP PUT. Use this tool when a client or frontend needs to upload a resume file directly to blob storage without routing binary payload through chat messages or MCP intermediaries.",
+    "Generates a pre-signed HTTP upload URL (for Cloudflare R2, AWS S3, MinIO, or the local server) allowing direct binary file upload via HTTP PUT. When jobId is provided, structures the target storage path under that job.",
   inputSchema: z.object({
     userId: z
       .string()
       .uuid()
       .describe("UUID of the candidate/user. Example: '550e8400-e29b-41d4-a716-446655440000'"),
+    jobId: z
+      .string()
+      .optional()
+      .describe("Optional identifier of the target job posting this tailored resume is being prepared for."),
     resumeId: z
       .string()
       .uuid()
@@ -72,9 +81,10 @@ export const generateResumeUploadUrlTool = createTool({
       .default(900)
       .describe("Validity window in seconds for the upload link (default: 900 seconds = 15 minutes)"),
   }),
-  execute: async ({ userId, resumeId, fileName, contentType, expiresInSeconds }) => {
+  execute: async ({ userId, jobId, resumeId, fileName, contentType, expiresInSeconds }) => {
     return await storageService.generateResumeUploadUrl({
       userId,
+      jobId,
       resumeId,
       fileName,
       contentType,

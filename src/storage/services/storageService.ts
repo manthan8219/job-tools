@@ -71,10 +71,13 @@ export class StorageService {
           options.resumeId,
           options.userId,
           result.downloadUrl,
-          result.fileKey
+          result.fileKey,
+          options.jobId
         );
         logger.info(
-          `[StorageService] Successfully updated resume ${options.resumeId} with PDF URL: ${result.downloadUrl}`
+          `[StorageService] Successfully updated resume ${options.resumeId} with PDF URL: ${result.downloadUrl}${
+            options.jobId ? ` (linked to job ${options.jobId})` : ""
+          }`
         );
       } catch (err: any) {
         logger.warn(

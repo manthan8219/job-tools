@@ -43,16 +43,27 @@ export class LocalStorageProvider implements StorageProvider {
     return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
   }
 
-  private buildFileKey(userId: string, resumeId: string | undefined, fileName: string): string {
+  private buildFileKey(
+    userId: string,
+    resumeId: string | undefined,
+    jobId: string | undefined,
+    fileName: string
+  ): string {
     const safeName = this.sanitizeFileName(fileName);
     const timestamp = Date.now();
+    const jobPart = jobId ? `jobs/${jobId}/` : "";
     const resumePart = resumeId ? `${resumeId}/` : "";
-    return `users/${userId}/resumes/${resumePart}${timestamp}-${safeName}`;
+    return `users/${userId}/${jobPart}resumes/${resumePart}${timestamp}-${safeName}`;
   }
 
   async uploadFile(options: UploadFileOptions): Promise<UploadResult> {
     try {
-      const fileKey = this.buildFileKey(options.userId, options.resumeId, options.fileName);
+      const fileKey = this.buildFileKey(
+        options.userId,
+        options.resumeId,
+        options.jobId,
+        options.fileName
+      );
       const destinationPath = path.join(this.baseDir, fileKey);
 
       // Ensure directory exists
@@ -66,6 +77,7 @@ export class LocalStorageProvider implements StorageProvider {
             fileKey: "",
             downloadUrl: "",
             storageProvider: "local",
+            jobId: options.jobId,
             error: `Input file not found at ${resolvedInput}`,
           };
         }
@@ -78,6 +90,7 @@ export class LocalStorageProvider implements StorageProvider {
           fileKey: "",
           downloadUrl: "",
           storageProvider: "local",
+          jobId: options.jobId,
           error: "Neither filePath nor buffer was provided for upload.",
         };
       }
@@ -94,6 +107,7 @@ export class LocalStorageProvider implements StorageProvider {
         storageProvider: "local",
         fileSize: stat.size,
         contentType: options.contentType || "application/pdf",
+        jobId: options.jobId,
       };
     } catch (error: any) {
       logger.error("[LocalStorageProvider] Upload failed", error);
@@ -102,13 +116,19 @@ export class LocalStorageProvider implements StorageProvider {
         fileKey: "",
         downloadUrl: "",
         storageProvider: "local",
+        jobId: options.jobId,
         error: error.message || "Local upload failed",
       };
     }
   }
 
   async generateUploadUrl(options: GenerateUploadUrlOptions): Promise<PresignedUploadResult> {
-    const fileKey = this.buildFileKey(options.userId, options.resumeId, options.fileName);
+    const fileKey = this.buildFileKey(
+      options.userId,
+      options.resumeId,
+      options.jobId,
+      options.fileName
+    );
     const token = crypto.randomBytes(24).toString("hex");
     const expiresInSeconds = options.expiresInSeconds || 900; // 15 mins default
     const expiresAt = Date.now() + expiresInSeconds * 1000;
@@ -127,6 +147,7 @@ export class LocalStorageProvider implements StorageProvider {
       },
       expiresInSeconds,
       storageProvider: "local",
+      jobId: options.jobId,
     };
   }
 

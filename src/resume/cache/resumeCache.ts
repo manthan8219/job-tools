@@ -18,6 +18,10 @@ export class ResumeCache {
     return `user:${userId}:latest_resume`;
   }
 
+  private getUserJobResumeKey(userId: string, jobId: string): string {
+    return `user:${userId}:job:${jobId}:resume`;
+  }
+
   /**
    * Safely serializes a Resume to JSON string
    */
@@ -55,15 +59,41 @@ export class ResumeCache {
 
       const serialized = this.serialize(resume);
 
-      await Promise.allSettled([
+      const ops: Promise<any>[] = [
         redis.set(resumeKey, serialized, { EX: RESUME_TTL_SECONDS }),
         redis.set(latestKey, serialized, { EX: RESUME_TTL_SECONDS }),
         redis.del(userListKey),
-      ]);
+      ];
+
+      if (resume.jobId) {
+        const jobResumeKey = this.getUserJobResumeKey(resume.userId, resume.jobId);
+        ops.push(redis.set(jobResumeKey, serialized, { EX: RESUME_TTL_SECONDS }));
+      }
+
+      await Promise.allSettled(ops);
 
       logger.info(`[ResumeCache] Successfully cached resume ${resume.id} for user ${resume.userId} in Redis`);
     } catch (error: any) {
       logger.warn(`[ResumeCache] Could not cache resume ${resume.id} in Redis: ${error.message}`);
+    }
+  }
+
+  /**
+   * Retrieves a cached resume created specifically for a given job.
+   */
+  async getCachedResumeByJob(userId: string, jobId: string): Promise<Resume | null> {
+    try {
+      const redis = await getRedisClient();
+      const key = this.getUserJobResumeKey(userId, jobId);
+      const data = await redis.get(key);
+
+      if (!data) return null;
+
+      logger.info(`[ResumeCache] Cache HIT for user ${userId} job ${jobId} resume`);
+      return this.deserialize(data);
+    } catch (error: any) {
+      logger.warn(`[ResumeCache] Failed to get cached job resume for user ${userId} job ${jobId}: ${error.message}`);
+      return null;
     }
   }
 

@@ -48,11 +48,17 @@ export class ResumeService {
     return resume;
   }
 
-  async updateResumePdfUrl(id: string, userId: string, pdfUrl: string, fileKey?: string): Promise<Resume> {
+  async updateResumePdfUrl(
+    id: string,
+    userId: string,
+    pdfUrl: string,
+    fileKey?: string,
+    jobId?: string
+  ): Promise<Resume> {
     // Verify resume exists and belongs to user
     await this.getResume(id, userId);
 
-    const updated = await this.repository.updatePdfUrl(id, pdfUrl, fileKey);
+    const updated = await this.repository.updatePdfUrl(id, pdfUrl, fileKey, jobId);
     if (!updated) {
       throw new NotFoundError(`Resume with ID ${id}`);
     }
@@ -60,6 +66,21 @@ export class ResumeService {
     // Refresh Redis cache
     await this.cache.cacheResume(updated);
     return updated;
+  }
+
+  async getResumeForJob(userId: string, jobId: string): Promise<Resume | null> {
+    // 1. Check Redis cache first
+    const cached = await this.cache.getCachedResumeByJob(userId, jobId);
+    if (cached) {
+      return cached;
+    }
+
+    // 2. Cache miss -> query MongoDB
+    const resume = await this.repository.findByJobId(userId, jobId);
+    if (resume) {
+      await this.cache.cacheResume(resume);
+    }
+    return resume;
   }
 
   async getUserResumes(userId: string): Promise<Resume[]> {

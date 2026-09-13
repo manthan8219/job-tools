@@ -130,3 +130,35 @@ export const searchSimilarResumesTool = createTool({
     }
   }),
 });
+
+const GetResumeForJobInput = z.object({
+  jobId: z.string().describe("Unique identifier of the target job posting"),
+  authUserId: z.string().optional(),
+});
+
+export const getResumeForJobTool = createTool({
+  id: "getResumeForJob",
+  description:
+    "Retrieves the candidate's tailored resume and rendered PDF URL specifically created for a given job posting.",
+  inputSchema: GetResumeForJobInput,
+  execute: withAuth(async (input: z.infer<typeof GetResumeForJobInput>) => {
+    try {
+      const userId = input.authUserId as string;
+      const resume = await resumeService.getResumeForJob(userId, input.jobId);
+      if (!resume) {
+        return {
+          success: false,
+          resume: null,
+          message: `No tailored resume found for job ${input.jobId}`,
+        };
+      }
+      return {
+        success: true,
+        resume,
+        message: `Successfully retrieved tailored resume for job ${input.jobId}`,
+      };
+    } catch (error: any) {
+      return { success: false, resume: null, error: error.name || "Error", message: error.message };
+    }
+  }),
+});

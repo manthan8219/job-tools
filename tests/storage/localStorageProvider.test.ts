@@ -55,6 +55,25 @@ describe("LocalStorageProvider", () => {
     expect(fs.existsSync(storedPath)).toBe(true);
   });
 
+  it("should successfully upload a file structured under jobId when jobId is provided", async () => {
+    const testFilePath = path.join(tempDir, "sample_job.pdf");
+    fs.writeFileSync(testFilePath, "%PDF-1.4 job resume content");
+
+    const result = await provider.uploadFile({
+      filePath: testFilePath,
+      fileName: "tailored_resume.pdf",
+      userId: "11111111-1111-1111-1111-111111111111",
+      jobId: "33333333-3333-3333-3333-333333333333",
+      resumeId: "22222222-2222-2222-2222-222222222222",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.jobId).toBe("33333333-3333-3333-3333-333333333333");
+    expect(result.fileKey).toContain("users/11111111-1111-1111-1111-111111111111/jobs/33333333-3333-3333-3333-333333333333/resumes/22222222-2222-2222-2222-222222222222/");
+    expect(result.fileKey).toContain("tailored_resume.pdf");
+    expect(fs.existsSync(path.join(tempDir, result.fileKey))).toBe(true);
+  });
+
   it("should successfully upload a file from buffer", async () => {
     const buffer = Buffer.from("%PDF-1.4 buffer test");
 

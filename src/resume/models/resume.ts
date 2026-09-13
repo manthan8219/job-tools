@@ -19,6 +19,7 @@ export const ResumeSchema = z.object({
   // In MongoDB this maps to _id, but we keep it as id in the app layer
   id: z.string().uuid().describe("Unique identifier for the resume"),
   userId: z.string().uuid().describe("The user this resume belongs to"),
+  jobId: z.string().uuid().optional().describe("Unique identifier of the target job this tailored resume was crafted for"),
   
   title: z.string().describe("e.g., 'Senior Frontend Engineer Resume'"),
   
