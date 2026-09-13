@@ -16,7 +16,8 @@ const ConvertFileInput = z.object({
 
 export const convertMdToPdfTool = createTool({
   id: "convert-md-to-pdf",
-  description: "Converts a Markdown (.md) file to a beautifully formatted PDF. Uses Puppeteer under the hood.",
+  description:
+    "Converts a Markdown (.md) resume file to a beautifully formatted PDF using Puppeteer. Once generated, pass the outputPath to the 'uploadResumeFile' tool to store the PDF in cloud or local storage and link it to the user's profile.",
   inputSchema: ConvertFileInput,
   execute: async ({ inputPath, outputPath }) => {
     try {
@@ -46,7 +47,8 @@ export const convertMdToPdfTool = createTool({
 
 export const convertLatexToPdfTool = createTool({
   id: "convert-latex-to-pdf",
-  description: "Converts a LaTeX (.tex) file to PDF. Requires pdflatex to be installed and available in the system PATH.",
+  description:
+    "Converts a LaTeX (.tex) resume file to a PDF using pdflatex. Once generated, pass the outputPath to the 'uploadResumeFile' tool to persist the PDF in cloud or local storage.",
   inputSchema: ConvertFileInput,
   execute: async ({ inputPath, outputPath }) => {
     return new Promise<any>((resolve) => {
