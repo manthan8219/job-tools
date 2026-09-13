@@ -132,4 +132,19 @@ describe("UserWorkCache", () => {
     const result = await cache.getCachedWorkById(mockWork.id);
     expect(result).toBeNull();
   });
+
+  it("should check if work is cached using exists", async () => {
+    redisMock.exists = vi.fn().mockResolvedValueOnce(1);
+
+    const exists = await cache.hasCachedWork("work-uuid-1");
+    expect(exists).toBe(true);
+    expect(redisMock.exists).toHaveBeenCalledWith("user_work:work-uuid-1");
+  });
+
+  it("should return false if work is not in cache", async () => {
+    redisMock.exists = vi.fn().mockResolvedValueOnce(0);
+
+    const exists = await cache.hasCachedWork("work-uuid-1");
+    expect(exists).toBe(false);
+  });
 });

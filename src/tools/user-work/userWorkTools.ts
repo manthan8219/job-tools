@@ -157,3 +157,38 @@ export const getFeaturedUserWorkTool = createTool({
     }
   }),
 });
+
+const CheckRepositoryScrapedToolInput = z.object({
+  repositoryId: z.string().describe("Repository record UUID, repository name (e.g. 'job-tools'), or remote GitHub URL"),
+  userId: z.string().uuid().optional().describe("User ID. Defaults to authenticated user"),
+  authUserId: z.string().optional(),
+});
+
+export const checkRepositoryScrapedTool = createTool({
+  id: "check-repository-scraped",
+  description:
+    "Checks if a specific repository has already been scraped and stored in the database. Returns boolean isScraped (true or false).",
+  inputSchema: CheckRepositoryScrapedToolInput,
+  execute: withAuth(async (input: z.infer<typeof CheckRepositoryScrapedToolInput>) => {
+    try {
+      const effectiveUserId = input.userId || (input.authUserId as string);
+      const isScraped = await userWorkService.isRepositoryScraped(
+        input.repositoryId,
+        effectiveUserId
+      );
+
+      return {
+        success: true,
+        repositoryId: input.repositoryId,
+        isScraped,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        repositoryId: input.repositoryId,
+        isScraped: false,
+        error: error.message,
+      };
+    }
+  }),
+});

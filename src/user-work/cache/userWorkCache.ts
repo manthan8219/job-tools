@@ -229,6 +229,28 @@ export class UserWorkCache {
       logger.warn(`[UserWorkCache] Error invalidating work cache: ${error.message}`);
     }
   }
+
+  /**
+   * Checks if a repository is cached in Redis by ID or repository name
+   */
+  async hasCachedWork(idOrName: string, userId?: string): Promise<boolean> {
+    try {
+      const redis = await getRedisClient();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrName);
+      if (isUuid) {
+        const count = await redis.exists(this.getWorkIdKey(idOrName));
+        if (count > 0) return true;
+      }
+      if (userId) {
+        const count = await redis.exists(this.getUserRepoKey(userId, idOrName));
+        if (count > 0) return true;
+      }
+      const directCount = await redis.exists(this.getWorkIdKey(idOrName));
+      return directCount > 0;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export const userWorkCache = new UserWorkCache();

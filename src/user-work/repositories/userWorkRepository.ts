@@ -383,6 +383,51 @@ export class UserWorkPostgresRepository {
     const res = await queryPostgres(sql, [userId, idOrName]);
     return (res.rowCount || 0) > 0;
   }
+
+  /**
+   * Checks if a repository has already been scraped and stored by ID, repository name, or remote URL.
+   * Returns true if found, false otherwise.
+   */
+  async exists(idOrName: string, userId?: string): Promise<boolean> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrName);
+    let sql: string;
+    let params: any[];
+
+    if (isUuid) {
+      if (userId) {
+        sql = `SELECT 1 FROM user_repositories WHERE id = $1 AND user_id = $2 LIMIT 1;`;
+        params = [idOrName, userId];
+      } else {
+        sql = `SELECT 1 FROM user_repositories WHERE id = $1 LIMIT 1;`;
+        params = [idOrName];
+      }
+    } else {
+      if (userId) {
+        sql = `
+          SELECT 1 FROM user_repositories
+          WHERE user_id = $1 AND (
+            LOWER(repository_name) = LOWER($2) OR
+            LOWER(full_name) = LOWER($2) OR
+            LOWER(remote_url) = LOWER($2)
+          ) LIMIT 1;
+        `;
+        params = [userId, idOrName];
+      } else {
+        sql = `
+          SELECT 1 FROM user_repositories
+          WHERE (
+            LOWER(repository_name) = LOWER($1) OR
+            LOWER(full_name) = LOWER($1) OR
+            LOWER(remote_url) = LOWER($1)
+          ) LIMIT 1;
+        `;
+        params = [idOrName];
+      }
+    }
+
+    const res = await queryPostgres(sql, params);
+    return res.rows.length > 0;
+  }
 }
 
 export const userWorkRepository = new UserWorkPostgresRepository();

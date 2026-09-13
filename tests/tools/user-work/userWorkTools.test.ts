@@ -4,6 +4,7 @@ import {
   getUserWorkTool,
   getUserWorkListTool,
   getFeaturedUserWorkTool,
+  checkRepositoryScrapedTool,
 } from "../../../src/tools/user-work/userWorkTools.js";
 import { userWorkService } from "../../../src/user-work/services/userWorkService.js";
 
@@ -15,6 +16,7 @@ vi.mock("../../../src/user-work/services/userWorkService.js", () => ({
     getWorkByRepo: vi.fn(),
     getUserWorkList: vi.fn(),
     getFeaturedWork: vi.fn(),
+    isRepositoryScraped: vi.fn(),
   },
 }));
 
@@ -161,6 +163,31 @@ describe("User Work MCP Tools", () => {
       expect(result.success).toBe(true);
       expect(result.totalFound).toBe(1);
       expect(result.featuredProjects).toHaveLength(1);
+    });
+  });
+
+  describe("checkRepositoryScrapedTool", () => {
+    it("should return true when repository is scraped", async () => {
+      vi.mocked(userWorkService.isRepositoryScraped).mockResolvedValueOnce(true);
+
+      const result = await checkRepositoryScrapedTool.execute({
+        repositoryId: "job-tools",
+      });
+
+      expect(userWorkService.isRepositoryScraped).toHaveBeenCalledWith("job-tools", "user-1234-5678");
+      expect(result.success).toBe(true);
+      expect(result.isScraped).toBe(true);
+    });
+
+    it("should return false when repository is not scraped", async () => {
+      vi.mocked(userWorkService.isRepositoryScraped).mockResolvedValueOnce(false);
+
+      const result = await checkRepositoryScrapedTool.execute({
+        repositoryId: "new-unscraped-repo",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.isScraped).toBe(false);
     });
   });
 });

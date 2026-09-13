@@ -146,6 +146,21 @@ export class UserWorkService {
     }
     return deleted;
   }
+
+  /**
+   * Checks whether a repository has already been scraped and stored.
+   * Returns true if present in Redis cache or PostgreSQL, false otherwise.
+   */
+  async isRepositoryScraped(idOrName: string, userId?: string): Promise<boolean> {
+    // 1. Fast-path Redis check
+    const cached = await this.cache.hasCachedWork(idOrName, userId);
+    if (cached) {
+      return true;
+    }
+
+    // 2. Query PostgreSQL
+    return await this.repository.exists(idOrName, userId);
+  }
 }
 
 export const userWorkService = new UserWorkService();

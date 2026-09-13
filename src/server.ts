@@ -33,6 +33,7 @@ import {
   getUserWorkTool,
   getUserWorkListTool,
   getFeaturedUserWorkTool,
+  checkRepositoryScrapedTool,
 } from "./tools/user-work/userWorkTools.js";
 
 export const server = new MCPServer({
@@ -70,6 +71,7 @@ export const server = new MCPServer({
     getUserWork: getUserWorkTool,
     getUserWorkList: getUserWorkListTool,
     getFeaturedUserWork: getFeaturedUserWorkTool,
+    checkRepositoryScraped: checkRepositoryScrapedTool,
   },
 });
 

@@ -206,4 +206,30 @@ describe("UserWorkPostgresRepository", () => {
     const deleted = await repository.delete(sampleInput.userId, "job-tools");
     expect(deleted).toBe(true);
   });
+
+  it("should check if repository exists by UUID", async () => {
+    vi.mocked(queryPostgres).mockResolvedValueOnce({
+      rows: [{ '?column?': 1 }],
+      rowCount: 1,
+      command: "SELECT",
+      oid: 0,
+      fields: [],
+    });
+
+    const exists = await repository.exists("a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d", sampleInput.userId);
+    expect(exists).toBe(true);
+  });
+
+  it("should check if repository exists by repository name", async () => {
+    vi.mocked(queryPostgres).mockResolvedValueOnce({
+      rows: [],
+      rowCount: 0,
+      command: "SELECT",
+      oid: 0,
+      fields: [],
+    });
+
+    const exists = await repository.exists("non-existent-repo", sampleInput.userId);
+    expect(exists).toBe(false);
+  });
 });

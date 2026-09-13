@@ -18,6 +18,7 @@ describe("UserWorkService", () => {
       findByUserId: vi.fn(),
       findFeatured: vi.fn(),
       delete: vi.fn(),
+      exists: vi.fn(),
     };
 
     cacheMock = {
@@ -29,6 +30,7 @@ describe("UserWorkService", () => {
       getCachedFeaturedWork: vi.fn().mockResolvedValue(null),
       cacheFeaturedWork: vi.fn().mockResolvedValue(undefined),
       invalidateWork: vi.fn().mockResolvedValue(undefined),
+      hasCachedWork: vi.fn().mockResolvedValue(false),
     };
 
     service = new UserWorkService(repoMock, cacheMock);
@@ -142,5 +144,33 @@ describe("UserWorkService", () => {
     const deleted = await service.deleteWork("11111111-1111-1111-1111-111111111111", "work-1");
     expect(deleted).toBe(true);
     expect(cacheMock.invalidateWork).toHaveBeenCalledWith("work-1", "11111111-1111-1111-1111-111111111111", "work-1");
+  });
+
+  describe("isRepositoryScraped", () => {
+    it("should return true when found in Redis cache", async () => {
+      cacheMock.hasCachedWork = vi.fn().mockResolvedValueOnce(true);
+
+      const scraped = await service.isRepositoryScraped("work-1", "11111111-1111-1111-1111-111111111111");
+      expect(scraped).toBe(true);
+      expect(cacheMock.hasCachedWork).toHaveBeenCalledWith("work-1", "11111111-1111-1111-1111-111111111111");
+      expect(repoMock.exists).not.toHaveBeenCalled();
+    });
+
+    it("should check database when not in cache and return true if exists", async () => {
+      cacheMock.hasCachedWork = vi.fn().mockResolvedValueOnce(false);
+      repoMock.exists = vi.fn().mockResolvedValueOnce(true);
+
+      const scraped = await service.isRepositoryScraped("job-tools", "11111111-1111-1111-1111-111111111111");
+      expect(scraped).toBe(true);
+      expect(repoMock.exists).toHaveBeenCalledWith("job-tools", "11111111-1111-1111-1111-111111111111");
+    });
+
+    it("should return false when neither in cache nor in database", async () => {
+      cacheMock.hasCachedWork = vi.fn().mockResolvedValueOnce(false);
+      repoMock.exists = vi.fn().mockResolvedValueOnce(false);
+
+      const scraped = await service.isRepositoryScraped("unscraped-repo", "11111111-1111-1111-1111-111111111111");
+      expect(scraped).toBe(false);
+    });
   });
 });
