@@ -22,6 +22,8 @@ export class CompanyRepository {
           slug VARCHAR(255) UNIQUE NOT NULL,
           website_url TEXT,
           logo_url TEXT,
+          linkedin_url TEXT,
+          linkedin_id VARCHAR(100),
           description TEXT,
           industry VARCHAR(100),
           size_range VARCHAR(50),
@@ -36,8 +38,9 @@ export class CompanyRepository {
         CREATE INDEX IF NOT EXISTS idx_companies_slug ON companies (slug);
         CREATE INDEX IF NOT EXISTS idx_companies_ats ON companies (ats_type, is_active);
         CREATE INDEX IF NOT EXISTS idx_companies_industry ON companies (industry);
+        CREATE INDEX IF NOT EXISTS idx_companies_linkedin_id ON companies (linkedin_id);
 
-        -- Add company_id reference to jobs if not present
+        -- Add company_id reference to jobs and LinkedIn columns to companies if not present
         DO $$
         BEGIN
           IF NOT EXISTS (
@@ -46,6 +49,21 @@ export class CompanyRepository {
           ) THEN
             ALTER TABLE jobs ADD COLUMN company_id UUID REFERENCES companies(id) ON DELETE SET NULL;
             CREATE INDEX idx_jobs_company_id ON jobs (company_id);
+          END IF;
+
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'companies' AND column_name = 'linkedin_url'
+          ) THEN
+            ALTER TABLE companies ADD COLUMN linkedin_url TEXT;
+          END IF;
+
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'companies' AND column_name = 'linkedin_id'
+          ) THEN
+            ALTER TABLE companies ADD COLUMN linkedin_id VARCHAR(100);
+            CREATE INDEX IF NOT EXISTS idx_companies_linkedin_id ON companies (linkedin_id);
           END IF;
         END $$;
       `);
@@ -88,14 +106,16 @@ export class CompanyRepository {
 
     const sql = `
       INSERT INTO companies (
-        id, name, slug, website_url, logo_url, description, industry,
+        id, name, slug, website_url, logo_url, linkedin_url, linkedin_id, description, industry,
         size_range, headquarters_location_id, ats_type, ats_board_token,
         is_active, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       ON CONFLICT (slug) DO UPDATE SET
         name = EXCLUDED.name,
         website_url = COALESCE(EXCLUDED.website_url, companies.website_url),
         logo_url = COALESCE(EXCLUDED.logo_url, companies.logo_url),
+        linkedin_url = COALESCE(EXCLUDED.linkedin_url, companies.linkedin_url),
+        linkedin_id = COALESCE(EXCLUDED.linkedin_id, companies.linkedin_id),
         description = COALESCE(EXCLUDED.description, companies.description),
         industry = COALESCE(EXCLUDED.industry, companies.industry),
         ats_type = COALESCE(EXCLUDED.ats_type, companies.ats_type),
@@ -103,6 +123,7 @@ export class CompanyRepository {
         updated_at = CURRENT_TIMESTAMP
       RETURNING
         id, name, slug, website_url AS "websiteUrl", logo_url AS "logoUrl",
+        linkedin_url AS "linkedinUrl", linkedin_id AS "linkedinId",
         description, industry, size_range AS "sizeRange",
         headquarters_location_id AS "headquartersLocationId",
         ats_type AS "atsType", ats_board_token AS "atsBoardToken",
@@ -115,6 +136,8 @@ export class CompanyRepository {
       input.slug.toLowerCase().trim(),
       input.websiteUrl || null,
       input.logoUrl || null,
+      input.linkedinUrl || null,
+      input.linkedinId || null,
       input.description || null,
       input.industry || null,
       input.sizeRange || null,
@@ -138,6 +161,8 @@ export class CompanyRepository {
     slug?: string;
     websiteUrl?: string;
     logoUrl?: string;
+    linkedinUrl?: string;
+    linkedinId?: string;
     atsType?: any;
     atsBoardToken?: string;
   }): Promise<Company> {
@@ -153,6 +178,8 @@ export class CompanyRepository {
       slug,
       websiteUrl: data.websiteUrl,
       logoUrl: data.logoUrl,
+      linkedinUrl: data.linkedinUrl,
+      linkedinId: data.linkedinId,
       atsType: data.atsType,
       atsBoardToken: data.atsBoardToken,
       isActive: true,
@@ -163,6 +190,7 @@ export class CompanyRepository {
     const res = await queryPostgres<Company>(
       `SELECT
         id, name, slug, website_url AS "websiteUrl", logo_url AS "logoUrl",
+        linkedin_url AS "linkedinUrl", linkedin_id AS "linkedinId",
         description, industry, size_range AS "sizeRange",
         headquarters_location_id AS "headquartersLocationId",
         ats_type AS "atsType", ats_board_token AS "atsBoardToken",
@@ -177,12 +205,28 @@ export class CompanyRepository {
     const res = await queryPostgres<Company>(
       `SELECT
         id, name, slug, website_url AS "websiteUrl", logo_url AS "logoUrl",
+        linkedin_url AS "linkedinUrl", linkedin_id AS "linkedinId",
         description, industry, size_range AS "sizeRange",
         headquarters_location_id AS "headquartersLocationId",
         ats_type AS "atsType", ats_board_token AS "atsBoardToken",
         is_active AS "isActive", created_at AS "createdAt", updated_at AS "updatedAt"
        FROM companies WHERE id = $1`,
       [id]
+    );
+    return res.rows[0] || null;
+  }
+
+  async findByLinkedinId(linkedinId: string): Promise<Company | null> {
+    const res = await queryPostgres<Company>(
+      `SELECT
+        id, name, slug, website_url AS "websiteUrl", logo_url AS "logoUrl",
+        linkedin_url AS "linkedinUrl", linkedin_id AS "linkedinId",
+        description, industry, size_range AS "sizeRange",
+        headquarters_location_id AS "headquartersLocationId",
+        ats_type AS "atsType", ats_board_token AS "atsBoardToken",
+        is_active AS "isActive", created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM companies WHERE LOWER(linkedin_id) = LOWER($1)`,
+      [linkedinId.toLowerCase().trim()]
     );
     return res.rows[0] || null;
   }
@@ -194,6 +238,7 @@ export class CompanyRepository {
     const res = await queryPostgres<Company>(
       `SELECT
         id, name, slug, website_url AS "websiteUrl", logo_url AS "logoUrl",
+        linkedin_url AS "linkedinUrl", linkedin_id AS "linkedinId",
         description, industry, size_range AS "sizeRange",
         headquarters_location_id AS "headquartersLocationId",
         ats_type AS "atsType", ats_board_token AS "atsBoardToken",
@@ -223,7 +268,8 @@ export class CompanyRepository {
       conditions.push(`(
         LOWER(c.name) LIKE $${paramIndex} OR
         LOWER(c.slug) LIKE $${paramIndex} OR
-        LOWER(COALESCE(c.industry, '')) LIKE $${paramIndex}
+        LOWER(COALESCE(c.industry, '')) LIKE $${paramIndex} OR
+        LOWER(COALESCE(c.linkedin_id, '')) LIKE $${paramIndex}
       )`);
       params.push(`%${filter.query.toLowerCase().trim()}%`);
       paramIndex++;
@@ -239,6 +285,11 @@ export class CompanyRepository {
       params.push(filter.atsType);
     }
 
+    if (filter.linkedinId) {
+      conditions.push(`LOWER(c.linkedin_id) = LOWER($${paramIndex++})`);
+      params.push(filter.linkedinId.toLowerCase().trim());
+    }
+
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const countSql = `SELECT COUNT(*) AS count FROM companies c ${whereClause};`;
@@ -251,6 +302,7 @@ export class CompanyRepository {
     const dataSql = `
       SELECT
         c.id, c.name, c.slug, c.website_url AS "websiteUrl", c.logo_url AS "logoUrl",
+        c.linkedin_url AS "linkedinUrl", c.linkedin_id AS "linkedinId",
         c.description, c.industry, c.size_range AS "sizeRange",
         c.headquarters_location_id AS "headquartersLocationId",
         c.ats_type AS "atsType", c.ats_board_token AS "atsBoardToken",

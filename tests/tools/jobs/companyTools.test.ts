@@ -27,6 +27,8 @@ describe("Company MCP Tools", () => {
     headquartersLocationId: null,
     atsType: "greenhouse",
     atsBoardToken: "gitlab",
+    linkedinUrl: "https://www.linkedin.com/company/gitlab-com",
+    linkedinId: "gitlab-com",
     isActive: true,
     activeJobsCount: "12",
     createdAt: new Date(),
@@ -55,6 +57,7 @@ describe("Company MCP Tools", () => {
     const result = await (searchCompaniesTool.execute as any)({
       query: "GitLab",
       atsType: "greenhouse",
+      linkedinId: "gitlab-com",
       limit: 10,
       offset: 0,
     });
@@ -65,6 +68,8 @@ describe("Company MCP Tools", () => {
     expect(result.companies[0].name).toBe("GitLab");
     expect(result.companies[0].activeJobsCount).toBe(12);
     expect(result.companies[0].atsType).toBe("greenhouse");
+    expect(result.companies[0].linkedinId).toBe("gitlab-com");
+    expect(result.companies[0].linkedinUrl).toBe("https://www.linkedin.com/company/gitlab-com");
   });
 
   it("getCompanyDetailsTool should return full company details and active jobs by slug", async () => {
@@ -122,13 +127,15 @@ describe("Company MCP Tools", () => {
     expect(result.success).toBe(true);
     expect(result.company).not.toBeNull();
     expect(result.company.name).toBe("GitLab");
+    expect(result.company.linkedinId).toBe("gitlab-com");
+    expect(result.company.linkedinUrl).toBe("https://www.linkedin.com/company/gitlab-com");
     expect(result.activeJobs).toHaveLength(1);
     expect(result.activeJobs[0].title).toBe("Senior Backend Engineer");
     expect(result.activeJobs[0].company).toBe("GitLab");
   });
 
   it("getCompanyDetailsTool should handle company not found gracefully", async () => {
-    vi.mocked(queryPostgres).mockResolvedValueOnce({
+    vi.mocked(queryPostgres).mockResolvedValue({
       rows: [],
       rowCount: 0,
       command: "SELECT",

@@ -16,6 +16,7 @@ export const searchCompaniesTool = createTool({
     query: z.string().optional().describe("Company name or keyword (e.g. 'GitLab', 'Stripe')"),
     industry: z.string().optional().describe("Industry filter (e.g. 'Technology', 'Fintech')"),
     atsType: CompanyAtsTypeEnum.optional().describe("ATS platform (greenhouse, ashby, lever, workday, custom, unknown)"),
+    linkedinId: z.string().optional().describe("Filter by LinkedIn company handle or ID (e.g. 'gitlab-com', 'stripe')"),
     limit: z.number().int().positive().max(50).default(20).describe("Max results to return (default 20)"),
     offset: z.number().int().nonnegative().default(0).describe("Pagination offset (default 0)"),
   }),
@@ -32,6 +33,8 @@ export const searchCompaniesTool = createTool({
         slug: z.string(),
         websiteUrl: z.string().nullable().optional(),
         logoUrl: z.string().nullable().optional(),
+        linkedinUrl: z.string().nullable().optional(),
+        linkedinId: z.string().nullable().optional(),
         description: z.string().nullable().optional(),
         industry: z.string().nullable().optional(),
         sizeRange: z.string().nullable().optional(),
@@ -56,6 +59,8 @@ export const searchCompaniesTool = createTool({
           slug: c.slug,
           websiteUrl: c.websiteUrl,
           logoUrl: c.logoUrl,
+          linkedinUrl: c.linkedinUrl,
+          linkedinId: c.linkedinId,
           description: c.description,
           industry: c.industry,
           sizeRange: c.sizeRange,
@@ -84,9 +89,9 @@ export const searchCompaniesTool = createTool({
 export const getCompanyDetailsTool = createTool({
   id: "get-company-details",
   description:
-    "Retrieves full profile details for a company along with its currently active job postings using either company UUID or slug (e.g. 'gitlab', 'stripe').",
+    "Retrieves full profile details for a company along with its currently active job postings using either company UUID, slug (e.g. 'gitlab', 'stripe'), or LinkedIn handle.",
   inputSchema: z.object({
-    idOrSlug: z.string().describe("Company UUID or slug (e.g. 'gitlab', 'stripe', 'linear')"),
+    idOrSlug: z.string().describe("Company UUID, slug, or LinkedIn handle (e.g. 'gitlab', 'stripe', 'gitlab-com')"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -97,6 +102,8 @@ export const getCompanyDetailsTool = createTool({
         slug: z.string(),
         websiteUrl: z.string().nullable().optional(),
         logoUrl: z.string().nullable().optional(),
+        linkedinUrl: z.string().nullable().optional(),
+        linkedinId: z.string().nullable().optional(),
         description: z.string().nullable().optional(),
         industry: z.string().nullable().optional(),
         sizeRange: z.string().nullable().optional(),

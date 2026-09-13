@@ -159,9 +159,16 @@ export class JobService {
    */
   async getCompanyDetails(idOrSlug: string): Promise<{ company: Company; activeJobs: Job[] } | null> {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
-    const company = isUuid
-      ? await this.companyRepo.findById(idOrSlug)
-      : await this.companyRepo.findBySlug(idOrSlug);
+    let company: Company | null = null;
+
+    if (isUuid) {
+      company = await this.companyRepo.findById(idOrSlug);
+    } else {
+      company = await this.companyRepo.findBySlug(idOrSlug);
+      if (!company) {
+        company = await this.companyRepo.findByLinkedinId(idOrSlug);
+      }
+    }
 
     if (!company) {
       return null;

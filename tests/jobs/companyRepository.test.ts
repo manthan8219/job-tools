@@ -230,4 +230,31 @@ describe("CompanyRepository", () => {
     expect(res.companies[0].activeJobsCount).toBe(14);
     expect(res.companies[0].name).toBe("GitLab");
   });
+
+  it("should look up company by linkedin handle", async () => {
+    vi.mocked(queryPostgres).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "uuid-gitlab",
+          name: "GitLab",
+          slug: "gitlab",
+          linkedinUrl: "https://www.linkedin.com/company/gitlab-com",
+          linkedinId: "gitlab-com",
+        },
+      ],
+      rowCount: 1,
+      command: "SELECT",
+      oid: 0,
+      fields: [],
+    });
+
+    const company = await repository.findByLinkedinId("gitlab-com");
+    expect(company).not.toBeNull();
+    expect(company?.name).toBe("GitLab");
+    expect(company?.linkedinId).toBe("gitlab-com");
+    expect(queryPostgres).toHaveBeenCalledWith(
+      expect.stringContaining("WHERE LOWER(linkedin_id) = LOWER($1)"),
+      ["gitlab-com"]
+    );
+  });
 });
