@@ -47,6 +47,11 @@ async function main() {
   const jobRepo = new JobRepository();
   await jobRepo.init();
 
+  // Initialize job user scoring table
+  const { JobScoringRepository } = await import("./job-scoring/repositories/jobScoringRepository.js");
+  const jobScoringRepo = new JobScoringRepository();
+  await jobScoringRepo.init();
+
   const app = express();
 
   // CORS headers so web/desktop IDE clients can communicate without transport rejection

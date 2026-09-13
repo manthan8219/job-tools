@@ -17,6 +17,11 @@ import {
   searchCompaniesTool,
   getCompanyDetailsTool,
 } from "./tools/jobs/companyTools.js";
+import {
+  saveJobScoreTool,
+  getJobScoreTool,
+  getUserTopScoredJobsTool,
+} from "./tools/job-scoring/jobScoringTools.js";
 
 export const server = new MCPServer({
   name: "job-applier-mcp",
@@ -43,6 +48,9 @@ export const server = new MCPServer({
     getJobDetails: getJobDetailsTool,
     searchCompanies: searchCompaniesTool,
     getCompanyDetails: getCompanyDetailsTool,
+    saveJobScore: saveJobScoreTool,
+    getJobScore: getJobScoreTool,
+    getUserTopScoredJobs: getUserTopScoredJobsTool,
   },
 });
 
