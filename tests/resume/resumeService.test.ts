@@ -1,20 +1,33 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { resumeService } from "../../src/resume/services/resumeService.js";
-import { resumeRepository } from "../../src/resume/repositories/resumeRepository.js";
+import { ResumeService } from "../../src/resume/services/resumeService.js";
 import { NotFoundError } from "../../src/utils/index.js";
 
-vi.mock("../../src/resume/repositories/resumeRepository.js", () => ({
-  resumeRepository: {
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByUserId: vi.fn(),
-    findSimilarResumes: vi.fn(),
-  },
-}));
-
 describe("ResumeService", () => {
+  let repoMock: any;
+  let cacheMock: any;
+  let service: ResumeService;
+
   beforeEach(() => {
     vi.clearAllMocks();
+
+    repoMock = {
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByUserId: vi.fn(),
+      findSimilarResumes: vi.fn(),
+    };
+
+    cacheMock = {
+      cacheResume: vi.fn().mockResolvedValue(undefined),
+      getCachedResume: vi.fn().mockResolvedValue(null),
+      getCachedUserResumes: vi.fn().mockResolvedValue(null),
+      cacheUserResumes: vi.fn().mockResolvedValue(undefined),
+      getCachedLatestResume: vi.fn().mockResolvedValue(null),
+      cacheLatestResume: vi.fn().mockResolvedValue(undefined),
+      invalidateResume: vi.fn().mockResolvedValue(undefined),
+    };
+
+    service = new ResumeService(repoMock, cacheMock);
   });
 
   afterEach(() => {
@@ -29,11 +42,13 @@ describe("ResumeService", () => {
     experience: [],
     education: [],
     embedding: [0.1, 0.2, 0.3],
+    createdAt: new Date("2026-09-13T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-13T00:00:00.000Z"),
   } as any;
 
   describe("createResume", () => {
-    it("should validate input and call repository", async () => {
-      vi.mocked(resumeRepository.create).mockResolvedValueOnce(mockResume);
+    it("should validate input, persist to repository, and cache in Redis", async () => {
+      repoMock.create.mockResolvedValueOnce(mockResume);
 
       const input = {
         title: "Software Engineer",
@@ -43,53 +58,122 @@ describe("ResumeService", () => {
         embedding: [0.1, 0.2, 0.3],
       };
 
-      const result = await resumeService.createResume(mockResume.userId, input);
+      const result = await service.createResume(mockResume.userId, input);
 
-      expect(resumeRepository.create).toHaveBeenCalledWith(mockResume.userId, input);
+      expect(repoMock.create).toHaveBeenCalledWith(mockResume.userId, input);
+      expect(cacheMock.cacheResume).toHaveBeenCalledWith(mockResume);
       expect(result).toEqual(mockResume);
     });
 
     it("should throw Zod error for invalid input", async () => {
-      // Missing title
       const input = { skills: ["TypeScript"], experience: [], education: [] };
-      await expect(resumeService.createResume(mockResume.userId, input)).rejects.toThrow();
+      await expect(service.createResume(mockResume.userId, input)).rejects.toThrow();
+      expect(repoMock.create).not.toHaveBeenCalled();
+      expect(cacheMock.cacheResume).not.toHaveBeenCalled();
     });
   });
 
   describe("getResume", () => {
-    it("should return resume if it exists and belongs to the user", async () => {
-      vi.mocked(resumeRepository.findById).mockResolvedValueOnce(mockResume);
+    it("should return resume from Redis cache on cache hit without calling repository", async () => {
+      cacheMock.getCachedResume.mockResolvedValueOnce(mockResume);
 
-      const result = await resumeService.getResume(mockResume.id, mockResume.userId);
+      const result = await service.getResume(mockResume.id, mockResume.userId);
+
+      expect(cacheMock.getCachedResume).toHaveBeenCalledWith(mockResume.id);
+      expect(repoMock.findById).not.toHaveBeenCalled();
       expect(result).toEqual(mockResume);
     });
 
-    it("should throw NotFoundError if resume belongs to a different user", async () => {
-      vi.mocked(resumeRepository.findById).mockResolvedValueOnce(mockResume);
+    it("should query repository and populate Redis cache on cache miss", async () => {
+      cacheMock.getCachedResume.mockResolvedValueOnce(null);
+      repoMock.findById.mockResolvedValueOnce(mockResume);
 
-      await expect(resumeService.getResume(mockResume.id, "different-user")).rejects.toThrow(NotFoundError);
+      const result = await service.getResume(mockResume.id, mockResume.userId);
+
+      expect(cacheMock.getCachedResume).toHaveBeenCalledWith(mockResume.id);
+      expect(repoMock.findById).toHaveBeenCalledWith(mockResume.id);
+      expect(cacheMock.cacheResume).toHaveBeenCalledWith(mockResume);
+      expect(result).toEqual(mockResume);
+    });
+
+    it("should throw NotFoundError if cached resume belongs to a different user", async () => {
+      cacheMock.getCachedResume.mockResolvedValueOnce(mockResume);
+
+      await expect(service.getResume(mockResume.id, "different-user")).rejects.toThrow(NotFoundError);
+    });
+
+    it("should throw NotFoundError if repository resume belongs to a different user", async () => {
+      cacheMock.getCachedResume.mockResolvedValueOnce(null);
+      repoMock.findById.mockResolvedValueOnce(mockResume);
+
+      await expect(service.getResume(mockResume.id, "different-user")).rejects.toThrow(NotFoundError);
     });
 
     it("should throw NotFoundError if resume does not exist", async () => {
-      vi.mocked(resumeRepository.findById).mockResolvedValueOnce(null);
+      cacheMock.getCachedResume.mockResolvedValueOnce(null);
+      repoMock.findById.mockResolvedValueOnce(null);
 
-      await expect(resumeService.getResume("bad-id", mockResume.userId)).rejects.toThrow(NotFoundError);
+      await expect(service.getResume("bad-id", mockResume.userId)).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe("getUserResumes", () => {
+    it("should return user resumes from Redis cache on cache hit", async () => {
+      cacheMock.getCachedUserResumes.mockResolvedValueOnce([mockResume]);
+
+      const result = await service.getUserResumes(mockResume.userId);
+
+      expect(cacheMock.getCachedUserResumes).toHaveBeenCalledWith(mockResume.userId);
+      expect(repoMock.findByUserId).not.toHaveBeenCalled();
+      expect(result).toEqual([mockResume]);
+    });
+
+    it("should query repository and cache resumes on cache miss", async () => {
+      cacheMock.getCachedUserResumes.mockResolvedValueOnce(null);
+      repoMock.findByUserId.mockResolvedValueOnce([mockResume]);
+
+      const result = await service.getUserResumes(mockResume.userId);
+
+      expect(repoMock.findByUserId).toHaveBeenCalledWith(mockResume.userId);
+      expect(cacheMock.cacheUserResumes).toHaveBeenCalledWith(mockResume.userId, [mockResume]);
+      expect(result).toEqual([mockResume]);
+    });
+  });
+
+  describe("getLatestResume", () => {
+    it("should return latest resume from Redis cache on cache hit", async () => {
+      cacheMock.getCachedLatestResume.mockResolvedValueOnce(mockResume);
+
+      const result = await service.getLatestResume(mockResume.userId);
+
+      expect(cacheMock.getCachedLatestResume).toHaveBeenCalledWith(mockResume.userId);
+      expect(result).toEqual(mockResume);
+    });
+
+    it("should retrieve user resumes and cache latest on cache miss", async () => {
+      cacheMock.getCachedLatestResume.mockResolvedValueOnce(null);
+      cacheMock.getCachedUserResumes.mockResolvedValueOnce([mockResume]);
+
+      const result = await service.getLatestResume(mockResume.userId);
+
+      expect(cacheMock.cacheLatestResume).toHaveBeenCalledWith(mockResume.userId, mockResume);
+      expect(result).toEqual(mockResume);
     });
   });
 
   describe("searchSimilarResumes", () => {
     it("should enforce vector presence and call repository", async () => {
       const queryVector = [0.9, 0.8, 0.7];
-      vi.mocked(resumeRepository.findSimilarResumes).mockResolvedValueOnce([mockResume]);
+      repoMock.findSimilarResumes.mockResolvedValueOnce([mockResume]);
 
-      const result = await resumeService.searchSimilarResumes(mockResume.userId, queryVector, 3);
+      const result = await service.searchSimilarResumes(mockResume.userId, queryVector, 3);
       
-      expect(resumeRepository.findSimilarResumes).toHaveBeenCalledWith(mockResume.userId, queryVector, 3);
+      expect(repoMock.findSimilarResumes).toHaveBeenCalledWith(mockResume.userId, queryVector, 3);
       expect(result).toEqual([mockResume]);
     });
 
     it("should throw an error if query vector is empty", async () => {
-      await expect(resumeService.searchSimilarResumes(mockResume.userId, [])).rejects.toThrow("Invalid query vector");
+      await expect(service.searchSimilarResumes(mockResume.userId, [])).rejects.toThrow("Invalid query vector");
     });
   });
 });

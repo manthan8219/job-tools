@@ -1,36 +1,95 @@
-import { resumeRepository } from "../repositories/resumeRepository.js";
+import { resumeRepository, ResumeRepository } from "../repositories/resumeRepository.js";
+import { resumeCache, ResumeCache } from "../cache/resumeCache.js";
 import { CreateResumeSchema, type Resume } from "../models/resume.js";
 import { NotFoundError } from "../../utils/index.js";
 
 export class ResumeService {
+  private repository: ResumeRepository;
+  private cache: ResumeCache;
+
+  constructor(repository: ResumeRepository = resumeRepository, cache: ResumeCache = resumeCache) {
+    this.repository = repository;
+    this.cache = cache;
+  }
+
   async createResume(userId: string, data: unknown): Promise<Resume> {
     // Validate the deeply nested JSON against Zod
     const parsedData = CreateResumeSchema.parse(data);
 
     // Persist to MongoDB
-    return await resumeRepository.create(userId, parsedData);
+    const created = await this.repository.create(userId, parsedData);
+
+    // Cache the newly created resume in Redis for frequent sub-millisecond retrieval
+    await this.cache.cacheResume(created);
+
+    return created;
   }
 
   async getResume(id: string, userId: string): Promise<Resume> {
-    const resume = await resumeRepository.findById(id);
-    
-    // Ensure the resume exists and belongs to the caller
+    // 1. Check Redis cache first
+    const cached = await this.cache.getCachedResume(id);
+    if (cached) {
+      // Ensure the resume belongs to the authenticated caller
+      if (cached.userId !== userId) {
+        throw new NotFoundError(`Resume with ID ${id}`);
+      }
+      return cached;
+    }
+
+    // 2. Cache miss -> query MongoDB
+    const resume = await this.repository.findById(id);
     if (!resume || resume.userId !== userId) {
       throw new NotFoundError(`Resume with ID ${id}`);
     }
-    
+
+    // 3. Populate Redis cache for future calls
+    await this.cache.cacheResume(resume);
+
     return resume;
   }
 
   async getUserResumes(userId: string): Promise<Resume[]> {
-    return await resumeRepository.findByUserId(userId);
+    // 1. Check Redis cache first
+    const cachedList = await this.cache.getCachedUserResumes(userId);
+    if (cachedList) {
+      return cachedList;
+    }
+
+    // 2. Cache miss -> query MongoDB
+    const resumes = await this.repository.findByUserId(userId);
+
+    // 3. Populate Redis cache if results found
+    if (resumes.length > 0) {
+      await this.cache.cacheUserResumes(userId, resumes);
+    }
+
+    return resumes;
+  }
+
+  async getLatestResume(userId: string): Promise<Resume | null> {
+    // 1. Check Redis cache for latest resume
+    const cachedLatest = await this.cache.getCachedLatestResume(userId);
+    if (cachedLatest) {
+      return cachedLatest;
+    }
+
+    // 2. Cache miss -> retrieve all resumes and sort by creation timestamp
+    const resumes = await this.getUserResumes(userId);
+    if (resumes.length === 0) return null;
+
+    const latest = resumes.sort(
+      (a, b) => (b.createdAt ? new Date(b.createdAt).getTime() : 0) - (a.createdAt ? new Date(a.createdAt).getTime() : 0)
+    )[0];
+
+    await this.cache.cacheLatestResume(userId, latest);
+    return latest;
   }
 
   async searchSimilarResumes(userId: string, queryVector: number[], limit: number = 3) {
     if (!queryVector || queryVector.length === 0) {
       throw new Error("Invalid query vector provided for semantic search.");
     }
-    return await resumeRepository.findSimilarResumes(userId, queryVector, limit);
+    return await this.repository.findSimilarResumes(userId, queryVector, limit);
   }
 }
 

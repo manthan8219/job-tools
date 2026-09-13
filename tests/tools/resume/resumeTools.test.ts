@@ -1,11 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createResumeTool, searchSimilarResumesTool } from "../../../src/tools/resume/resumeTools.js";
+import {
+  createResumeTool,
+  getResumeTool,
+  getUserResumesTool,
+  getLatestResumeTool,
+  searchSimilarResumesTool,
+} from "../../../src/tools/resume/resumeTools.js";
 import { resumeService } from "../../../src/resume/services/resumeService.js";
 
-// Note: withAuth middleware is automatically executed but uses the dummy injection
+// Note: withAuth middleware injects authUserId: "user-1234-5678"
 vi.mock("../../../src/resume/services/resumeService.js", () => ({
   resumeService: {
     createResume: vi.fn(),
+    getResume: vi.fn(),
+    getUserResumes: vi.fn(),
+    getLatestResume: vi.fn(),
     searchSimilarResumes: vi.fn(),
   },
 }));
@@ -22,6 +31,7 @@ describe("Resume MCP Tools", () => {
   const mockResume = {
     id: "uuid-1234",
     title: "Engineer",
+    userId: "user-1234-5678",
   } as any;
 
   describe("createResumeTool", () => {
@@ -37,10 +47,64 @@ describe("Resume MCP Tools", () => {
 
       const result = await createResumeTool.execute(input);
 
-      // The withAuth middleware injects authUserId: "user-1234-5678"
       expect(resumeService.createResume).toHaveBeenCalledWith("user-1234-5678", expect.objectContaining(input));
       expect(result.success).toBe(true);
       expect((result as any).resume).toEqual(mockResume);
+    });
+  });
+
+  describe("getResumeTool", () => {
+    it("should successfully retrieve resume by ID", async () => {
+      vi.mocked(resumeService.getResume).mockResolvedValueOnce(mockResume);
+
+      const result = await getResumeTool.execute({ id: mockResume.id });
+
+      expect(resumeService.getResume).toHaveBeenCalledWith(mockResume.id, "user-1234-5678");
+      expect(result.success).toBe(true);
+      expect((result as any).resume).toEqual(mockResume);
+    });
+
+    it("should return failure when resume not found", async () => {
+      vi.mocked(resumeService.getResume).mockRejectedValueOnce(new Error("Resume not found"));
+
+      const result = await getResumeTool.execute({ id: "missing-id" });
+
+      expect(result.success).toBe(false);
+      expect((result as any).message).toContain("Resume not found");
+    });
+  });
+
+  describe("getUserResumesTool", () => {
+    it("should return user resumes list", async () => {
+      vi.mocked(resumeService.getUserResumes).mockResolvedValueOnce([mockResume]);
+
+      const result = await getUserResumesTool.execute({});
+
+      expect(resumeService.getUserResumes).toHaveBeenCalledWith("user-1234-5678");
+      expect(result.success).toBe(true);
+      expect((result as any).totalFound).toBe(1);
+      expect((result as any).resumes).toHaveLength(1);
+    });
+  });
+
+  describe("getLatestResumeTool", () => {
+    it("should return user's latest resume", async () => {
+      vi.mocked(resumeService.getLatestResume).mockResolvedValueOnce(mockResume);
+
+      const result = await getLatestResumeTool.execute({});
+
+      expect(resumeService.getLatestResume).toHaveBeenCalledWith("user-1234-5678");
+      expect(result.success).toBe(true);
+      expect((result as any).resume).toEqual(mockResume);
+    });
+
+    it("should handle when no resumes exist for user", async () => {
+      vi.mocked(resumeService.getLatestResume).mockResolvedValueOnce(null);
+
+      const result = await getLatestResumeTool.execute({});
+
+      expect(result.success).toBe(false);
+      expect((result as any).message).toContain("No resumes found");
     });
   });
 
