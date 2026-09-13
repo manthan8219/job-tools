@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import { JobRepository } from "../repositories/jobRepository.js";
 import { LocationRepository } from "../repositories/locationRepository.js";
+import { CompanyRepository } from "../repositories/companyRepository.js";
 import { Job, CreateJobInput, JobFilter, JobSearchResult, ExperienceLevelEnum } from "../models/job.js";
+import { CompanyFilter, CompanyWithJobStats, Company } from "../models/company.js";
 import { ScrapedJob } from "../../scrapers/types.js";
 import { logger } from "../../utils/index.js";
 
@@ -17,7 +19,8 @@ const COMMON_TECH_SKILLS = [
 export class JobService {
   constructor(
     private jobRepo = new JobRepository(),
-    private locationRepo = new LocationRepository()
+    private locationRepo = new LocationRepository(),
+    private companyRepo = new CompanyRepository()
   ) {}
 
   /**
@@ -65,7 +68,7 @@ export class JobService {
   }
 
   /**
-   * Ingests a ScrapedJob entity into the PostgreSQL database with hierarchical location resolution
+   * Ingests a ScrapedJob entity into the PostgreSQL database with hierarchical location and company resolution
    */
   async ingestScrapedJob(scraped: ScrapedJob): Promise<Job> {
     const jobKey = this.generateJobKey(scraped.company, scraped.title, scraped.location);
@@ -83,13 +86,27 @@ export class JobService {
     const skills = this.extractSkills(`${scraped.title} ${scraped.description || ""} ${scraped.excerpt || ""}`, scraped.categories);
     const experienceLevel = this.inferExperienceLevel(scraped.title);
 
+    // Resolve or create company in PostgreSQL
+    const companySlug = scraped.company.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
+    let companyId: string | null = null;
+    try {
+      const company = await this.companyRepo.findOrCreateCompany({
+        name: scraped.company.trim(),
+        slug: companySlug,
+      });
+      companyId = company.id;
+    } catch (err) {
+      logger.warn(`[JobService] Failed to findOrCreateCompany for "${scraped.company}":`, err);
+    }
+
     const jobInput: CreateJobInput = {
       jobKey,
       externalId: scraped.id,
       source: scraped.source,
       title: scraped.title,
       company: scraped.company,
-      companySlug: scraped.company.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-"),
+      companySlug,
+      companyId,
       description: scraped.description,
       excerpt: scraped.excerpt,
       applyUrl: scraped.url,
@@ -128,5 +145,37 @@ export class JobService {
    */
   async getJobDetails(id: string): Promise<Job | null> {
     return await this.jobRepo.findById(id);
+  }
+
+  /**
+   * Search companies with active jobs count and filters
+   */
+  async searchCompanies(filter: CompanyFilter = {}): Promise<{ companies: CompanyWithJobStats[]; totalFound: number }> {
+    return await this.companyRepo.listCompanies(filter);
+  }
+
+  /**
+   * Get detailed company information including their active job postings
+   */
+  async getCompanyDetails(idOrSlug: string): Promise<{ company: Company; activeJobs: Job[] } | null> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+    const company = isUuid
+      ? await this.companyRepo.findById(idOrSlug)
+      : await this.companyRepo.findBySlug(idOrSlug);
+
+    if (!company) {
+      return null;
+    }
+
+    const { jobs } = await this.jobRepo.findJobs({
+      companyId: company.id,
+      status: "active",
+      limit: 25,
+    });
+
+    return {
+      company,
+      activeJobs: jobs,
+    };
   }
 }

@@ -5,6 +5,7 @@ import { ScrapedJob } from "../../src/scrapers/types.js";
 describe("JobService", () => {
   let jobRepoMock: any;
   let locationRepoMock: any;
+  let companyRepoMock: any;
   let service: JobService;
 
   beforeEach(() => {
@@ -31,7 +32,18 @@ describe("JobService", () => {
       }),
     };
 
-    service = new JobService(jobRepoMock, locationRepoMock);
+    companyRepoMock = {
+      findOrCreateCompany: vi.fn().mockResolvedValue({
+        id: "company-celonis-uuid",
+        name: "Celonis",
+        slug: "celonis",
+      }),
+      findById: vi.fn(),
+      findBySlug: vi.fn(),
+      listCompanies: vi.fn(),
+    };
+
+    service = new JobService(jobRepoMock, locationRepoMock, companyRepoMock);
   });
 
   afterEach(() => {
@@ -101,5 +113,65 @@ describe("JobService", () => {
     expect(ingested.skills).toContain("TypeScript");
     expect(ingested.skills).toContain("Node.js");
     expect(ingested.primaryLocationId).toBe("loc-de-uuid");
+    expect(companyRepoMock.findOrCreateCompany).toHaveBeenCalledWith({
+      name: "Celonis",
+      slug: "celonis",
+    });
+    expect(jobRepoMock.upsertJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "company-celonis-uuid",
+      })
+    );
+  });
+
+  it("should search companies via company repository", async () => {
+    companyRepoMock.listCompanies.mockResolvedValue({
+      companies: [
+        {
+          id: "comp-1",
+          name: "Stripe",
+          slug: "stripe",
+          activeJobsCount: 15,
+        },
+      ],
+      totalFound: 1,
+    });
+
+    const result = await service.searchCompanies({ query: "stripe" });
+    expect(result.totalFound).toBe(1);
+    expect(result.companies[0].name).toBe("Stripe");
+    expect(companyRepoMock.listCompanies).toHaveBeenCalledWith({ query: "stripe" });
+  });
+
+  it("should retrieve company details with active jobs", async () => {
+    companyRepoMock.findBySlug.mockResolvedValue({
+      id: "comp-gitlab",
+      name: "GitLab",
+      slug: "gitlab",
+      atsType: "greenhouse",
+    });
+
+    jobRepoMock.findJobs.mockResolvedValue({
+      jobs: [
+        {
+          id: "job-1",
+          title: "Backend Engineer",
+          company: "GitLab",
+          companyId: "comp-gitlab",
+          status: "active",
+        },
+      ],
+      totalFound: 1,
+    });
+
+    const details = await service.getCompanyDetails("gitlab");
+    expect(details).not.toBeNull();
+    expect(details?.company.name).toBe("GitLab");
+    expect(details?.activeJobs).toHaveLength(1);
+    expect(jobRepoMock.findJobs).toHaveBeenCalledWith({
+      companyId: "comp-gitlab",
+      status: "active",
+      limit: 25,
+    });
   });
 });

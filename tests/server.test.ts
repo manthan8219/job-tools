@@ -30,6 +30,8 @@ describe("MCP Server Base Setup", () => {
     expect(toolList.tools.some((t: any) => t.name === "convertLatexToPdf")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "checkOnboardingCompleted")).toBe(true);
     expect(toolList.tools.some((t: any) => t.name === "markOnboardingCompleted")).toBe(true);
+    expect(toolList.tools.some((t: any) => t.name === "searchCompanies")).toBe(true);
+    expect(toolList.tools.some((t: any) => t.name === "getCompanyDetails")).toBe(true);
   });
 
   it("should support registering and executing a Mastra tool", async () => {

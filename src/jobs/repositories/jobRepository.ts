@@ -34,6 +34,7 @@ export class JobRepository {
           salary_currency VARCHAR(10) DEFAULT 'USD',
           salary_period VARCHAR(20) DEFAULT 'annual',
           primary_location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+          company_id UUID REFERENCES companies(id) ON DELETE SET NULL,
           raw_location VARCHAR(255),
           is_worldwide BOOLEAN DEFAULT false,
           status VARCHAR(30) DEFAULT 'active',
@@ -54,6 +55,7 @@ export class JobRepository {
         );
 
         CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs (primary_location_id);
+        CREATE INDEX IF NOT EXISTS idx_jobs_company_id ON jobs (company_id);
         CREATE INDEX IF NOT EXISTS idx_jobs_status_arrangement ON jobs (status, work_arrangement);
         CREATE INDEX IF NOT EXISTS idx_jobs_posted_at ON jobs (posted_at DESC);
         CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs (company);
@@ -79,14 +81,14 @@ export class JobRepository {
         id, job_key, external_id, source, title, company, company_slug, company_logo_url,
         description, excerpt, apply_url, apply_type, apply_email, employment_type,
         work_arrangement, experience_level, categories, skills, salary_min, salary_max,
-        salary_currency, salary_period, primary_location_id, raw_location, is_worldwide,
+        salary_currency, salary_period, primary_location_id, company_id, raw_location, is_worldwide,
         status, posted_at, last_seen_at, expires_at, created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8,
         $9, $10, $11, $12, $13, $14,
         $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25,
-        $26, $27, $28, $29, $30, $31
+        $21, $22, $23, $24, $25, $26,
+        $27, $28, $29, $30, $31, $32
       )
       ON CONFLICT (job_key) DO UPDATE SET
         title = EXCLUDED.title,
@@ -96,6 +98,7 @@ export class JobRepository {
         salary_min = COALESCE(EXCLUDED.salary_min, jobs.salary_min),
         salary_max = COALESCE(EXCLUDED.salary_max, jobs.salary_max),
         primary_location_id = COALESCE(EXCLUDED.primary_location_id, jobs.primary_location_id),
+        company_id = COALESCE(EXCLUDED.company_id, jobs.company_id),
         status = 'active',
         last_seen_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
@@ -107,7 +110,7 @@ export class JobRepository {
         work_arrangement AS "workArrangement", experience_level AS "experienceLevel",
         categories, skills, salary_min AS "salaryMin", salary_max AS "salaryMax",
         salary_currency AS "salaryCurrency", salary_period AS "salaryPeriod",
-        primary_location_id AS "primaryLocationId", raw_location AS "rawLocation",
+        primary_location_id AS "primaryLocationId", company_id AS "companyId", raw_location AS "rawLocation",
         is_worldwide AS "isWorldwide", status, posted_at AS "postedAt",
         last_seen_at AS "lastSeenAt", expires_at AS "expiresAt",
         created_at AS "createdAt", updated_at AS "updatedAt";
@@ -137,6 +140,7 @@ export class JobRepository {
       data.salaryCurrency || "USD",
       data.salaryPeriod || "annual",
       data.primaryLocationId || null,
+      data.companyId || null,
       data.rawLocation || null,
       data.isWorldwide || false,
       data.status || "active",
@@ -175,6 +179,18 @@ export class JobRepository {
       params.push(q);
       params.push(filters.query.toLowerCase().trim());
       paramIndex += 2;
+    }
+
+    // Company filters
+    if (filters.companySlug) {
+      conditions.push(`(j.company_slug = $${paramIndex} OR LOWER(j.company) = $${paramIndex})`);
+      params.push(filters.companySlug.toLowerCase().trim());
+      paramIndex++;
+    }
+
+    if (filters.companyId) {
+      conditions.push(`j.company_id = $${paramIndex++}`);
+      params.push(filters.companyId);
     }
 
     // Work arrangement filter (remote, hybrid, on-site)
@@ -257,7 +273,7 @@ export class JobRepository {
 
     const dataSql = `
       SELECT
-        j.id, j.job_key AS "jobKey", j.external_id AS "externalId", j.source, j.title, j.company,
+        j.id, j.job_key AS "jobKey", j.company_id AS "companyId", j.external_id AS "externalId", j.source, j.title, j.company,
         j.company_slug AS "companySlug", j.company_logo_url AS "companyLogoUrl",
         j.description, j.excerpt, j.apply_url AS "applyUrl", j.apply_type AS "applyType",
         j.apply_email AS "applyEmail", j.employment_type AS "employmentType",
@@ -290,7 +306,7 @@ export class JobRepository {
   async findById(id: string): Promise<Job | null> {
     const res = await queryPostgres<Job>(
       `SELECT
-        id, job_key AS "jobKey", external_id AS "externalId", source, title, company,
+        id, job_key AS "jobKey", company_id AS "companyId", external_id AS "externalId", source, title, company,
         company_slug AS "companySlug", company_logo_url AS "companyLogoUrl",
         description, excerpt, apply_url AS "applyUrl", apply_type AS "applyType",
         apply_email AS "applyEmail", employment_type AS "employmentType",
@@ -310,7 +326,7 @@ export class JobRepository {
   async findByJobKey(jobKey: string): Promise<Job | null> {
     const res = await queryPostgres<Job>(
       `SELECT
-        id, job_key AS "jobKey", external_id AS "externalId", source, title, company,
+        id, job_key AS "jobKey", company_id AS "companyId", external_id AS "externalId", source, title, company,
         company_slug AS "companySlug", company_logo_url AS "companyLogoUrl",
         description, excerpt, apply_url AS "applyUrl", apply_type AS "applyType",
         apply_email AS "applyEmail", employment_type AS "employmentType",

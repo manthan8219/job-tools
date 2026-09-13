@@ -56,6 +56,7 @@ export const JobSchema = z.object({
   salaryCurrency: z.string().default("USD"),
   salaryPeriod: z.enum(["annual", "hourly", "monthly", "weekly", "fortnightly"]).default("annual"),
   primaryLocationId: z.string().uuid().nullable().optional(),
+  companyId: z.string().uuid().nullable().optional(),
   rawLocation: z.string().nullable().optional(),
   isWorldwide: z.boolean().default(false),
   status: JobStatusEnum.default("active"),
@@ -80,6 +81,8 @@ export type CreateJobInput = z.infer<typeof CreateJobInputSchema>;
 
 export const JobFilterSchema = z.object({
   query: z.string().optional().describe("Free-text search across title, company, skills"),
+  companySlug: z.string().optional().describe("Filter by company slug (e.g. 'ramp', 'gitlab')"),
+  companyId: z.string().uuid().optional().describe("Filter by company ID"),
   countryCode: z.string().optional().describe("Filter by country ISO code (e.g. 'DE', 'CA', 'US')"),
   citySlug: z.string().optional().describe("Filter by city slug (e.g. 'munich', 'toronto')"),
   locationPathPrefix: z.string().optional().describe("Filter by location tree path prefix (e.g. 'world.europe.de')"),
@@ -94,7 +97,7 @@ export const JobFilterSchema = z.object({
   offset: z.number().int().nonnegative().default(0),
 });
 
-export type JobFilter = z.infer<typeof JobFilterSchema>;
+export type JobFilter = z.input<typeof JobFilterSchema>;
 
 export interface JobSearchResult {
   jobs: (Job & {
